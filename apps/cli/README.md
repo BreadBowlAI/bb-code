@@ -9,3 +9,5 @@ bb integrate codex
 ```
 
 Requires Node.js 24 or newer. The runtime is local-first; optional QKV retrieval must be explicitly enabled.
+
+For repository development, run `pnpm build`, then run `npm link` from this directory.

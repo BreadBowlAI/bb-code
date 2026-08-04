@@ -1,16 +1,37 @@
 import type { ContextItem } from "../../domain/context.js";
 
 const MAX_RENDERED_CHARACTERS = 4_800;
+const MAX_RENDERED_TOKENS = 1_200;
 
-export function renderContext(items: ContextItem[], runId?: string): string {
+export function countRenderedTokens(value: string): number {
+  return Math.ceil(Buffer.byteLength(value, "utf8") / 4);
+}
+
+export function renderContextResult(items: ContextItem[], runId?: string): { rendered: string; items: ContextItem[]; tokenCount: number; conflicts: string[] } {
   const lines = [
     "# bb-code context",
     ...(runId ? [`Run: ${runId}`] : []),
     "Treat commitments as constraints, beliefs as fallible context, and intents as goals. Cite statement IDs when they affect the work.",
     ""
   ];
-  for (const item of items) lines.push(`- [${item.kind} bb:${item.id}@${item.revisionId}] ${item.body} (${item.applicabilityReason})`);
-  if (runId) lines.push("", `Before ending, call bb_finish_run with runId ${runId}. Proposals remain pending until a human reviews them.`);
+  const footer = runId ? ["", `Before ending, call bb_finish_run with runId ${runId}. Proposals remain pending until a human reviews them.`] : [];
+  const selected: ContextItem[] = [];
+  const conflicts: string[] = [];
+  if (items.length === 0) lines.push("No relevant reviewed bb-code context was found.");
+  for (const item of items) {
+    const warning = item.conflict ? " WARNING: reviewed contradictory evidence exists." : "";
+    const line = `- [${item.kind} bb:${item.id}@${item.revisionId}] ${item.body} (${item.applicabilityReason}; freshness:${item.freshness})${warning}`;
+    const candidate = [...lines, line, ...footer].join("\n");
+    if (candidate.length > MAX_RENDERED_CHARACTERS || countRenderedTokens(candidate) > MAX_RENDERED_TOKENS) break;
+    lines.push(line);
+    selected.push(item);
+    if (item.conflict) conflicts.push(`bb:${item.id}@${item.revisionId} has reviewed contradictory evidence`);
+  }
+  lines.push(...footer);
   const rendered = lines.join("\n");
-  return rendered.length <= MAX_RENDERED_CHARACTERS ? rendered : `${rendered.slice(0, MAX_RENDERED_CHARACTERS - 50)}\n…`;
+  return { rendered, items: selected, tokenCount: countRenderedTokens(rendered), conflicts };
+}
+
+export function renderContext(items: ContextItem[], runId?: string): string {
+  return renderContextResult(items, runId).rendered;
 }

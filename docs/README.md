@@ -24,6 +24,8 @@ folder structure.
    proprietary.
 7. [`GLOSSARY.md`](GLOSSARY.md) — precise definitions for the product and
    database language.
+8. [`TESTING.md`](TESTING.md) — automated release gates and the boundary between
+   deterministic acceptance checks and live dogfood/QKV evidence.
 
 ## Document precedence
 

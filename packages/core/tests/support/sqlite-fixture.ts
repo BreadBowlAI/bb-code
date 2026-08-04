@@ -16,11 +16,17 @@ export function createSqliteFixture(): SqliteFixture {
   const database = new BbDatabase(join(directory, "bb.db"));
   const repositoryId = `repo_${directory.split("-").at(-1)}`;
   const registration = database.registerRepository({ repositoryId, root: join(directory, "repo"), gitCommonDir: join(directory, "repo/.git"), gitDir: join(directory, "repo/.git"), headCommitSha: "abc", headTreeSha: "def", dirtyFingerprint: "clean", branchLabel: "main" });
+  let disposed = false;
   return {
     database,
     repositoryId,
     worktreeId: registration.worktreeId,
     gitViewId: registration.gitViewId,
-    dispose: () => { database.close(); rmSync(directory, { recursive: true, force: true }); }
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      try { database.close(); } catch { /* already closed by the test */ }
+      rmSync(directory, { recursive: true, force: true });
+    }
   };
 }

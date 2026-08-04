@@ -25,6 +25,50 @@ const VERSION_1 = `
   INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(1, datetime('now'));
 `;
 
+const VERSION_2 = `
+  ALTER TABLE git_views ADD COLUMN parent_shas_json TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE git_views ADD COLUMN stable_patch_id TEXT;
+  ALTER TABLE git_views ADD COLUMN changed_paths_json TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE run_events ADD COLUMN git_view_id TEXT REFERENCES git_views(id);
+  ALTER TABLE run_events ADD COLUMN consequential INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE candidate_updates ADD COLUMN accepted_proposal_json TEXT;
+  ALTER TABLE candidate_updates ADD COLUMN created_git_view_id TEXT REFERENCES git_views(id);
+  ALTER TABLE context_effects ADD COLUMN retrieval_id TEXT REFERENCES retrievals(id);
+  CREATE TABLE candidate_evidence(
+    candidate_id TEXT NOT NULL REFERENCES candidate_updates(id) ON DELETE CASCADE,
+    evidence_id TEXT NOT NULL REFERENCES evidence(id),
+    PRIMARY KEY(candidate_id, evidence_id)
+  );
+  CREATE UNIQUE INDEX run_events_external_event
+    ON run_events(run_id, external_event_id)
+    WHERE external_event_id IS NOT NULL;
+  CREATE INDEX statements_repository_kind ON statements(repository_id, kind);
+  CREATE INDEX evidence_run ON evidence(run_id);
+  CREATE INDEX evidence_git_view ON evidence(git_view_id);
+  CREATE INDEX retrievals_repository_created ON retrievals(repository_id, created_at DESC);
+  CREATE INDEX retrieval_jobs_ready ON retrieval_jobs(repository_id, provider, state, next_attempt_at);
+  CREATE INDEX git_views_repository_commit ON git_views(repository_id, head_commit_sha);
+  INSERT INTO schema_migrations(version, applied_at) VALUES(2, datetime('now'));
+`;
+
+const MIGRATIONS = [
+  { version: 2, sql: VERSION_2 }
+] as const;
+
 export function migrate(database: DatabaseSync): void {
   database.exec(VERSION_1);
+  const applied = new Set(
+    (database.prepare("SELECT version FROM schema_migrations").all() as Array<{ version: number }>).map((row) => row.version)
+  );
+  for (const migration of MIGRATIONS) {
+    if (applied.has(migration.version)) continue;
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      database.exec(migration.sql);
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
+  }
 }

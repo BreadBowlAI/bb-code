@@ -14,10 +14,22 @@ export async function runHookAdapter(host: Host, nativeEventName: string): Promi
     const event = normalizeHookEvent({ host, nativeEventName, payload: await readStdin(), defaultCwd: process.cwd() });
     if (!event) return;
     const output = await processRuntimeEvent(event, undefined, await configuredSemantic(event.cwd));
-    if (output.output) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: nativeEventName, additionalContext: output.output } }));
-    else if (output.nudge) process.stdout.write(JSON.stringify({ decision: "block", reason: output.nudge }));
+    const response = host === "codex" ? renderCodexResponse(nativeEventName, output) : renderClaudeResponse(nativeEventName, output);
+    if (response) process.stdout.write(JSON.stringify(response));
   } catch (error) {
     process.stderr.write(`[bb-code] ${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 0;
   }
+}
+
+export function renderCodexResponse(nativeEventName: string, output: { output?: string; nudge?: string }): Record<string, unknown> | undefined {
+  if (output.output) return { hookSpecificOutput: { hookEventName: nativeEventName, additionalContext: output.output } };
+  if (output.nudge) return { decision: "block", reason: output.nudge };
+  return undefined;
+}
+
+export function renderClaudeResponse(nativeEventName: string, output: { output?: string; nudge?: string }): Record<string, unknown> | undefined {
+  if (output.output) return { hookSpecificOutput: { hookEventName: nativeEventName, additionalContext: output.output } };
+  if (output.nudge) return { decision: "block", reason: output.nudge };
+  return undefined;
 }

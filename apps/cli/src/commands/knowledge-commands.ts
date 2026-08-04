@@ -1,6 +1,6 @@
 import { confirm, input, select } from "@inquirer/prompts";
 import type { Command } from "commander";
-import { addStatement, getContext, openWorkspace, type Scope, type StatementAttributes } from "@breadbowl/bb-core";
+import { CandidateProposalSchema, addStatement, getContext, openWorkspace, type CandidateProposal, type Scope, type StatementAttributes } from "@breadbowl/bb-core";
 import { configuredSemantic } from "../composition/semantic-provider.js";
 import { humanActor, print } from "./io.js";
 
@@ -46,14 +46,45 @@ export function registerKnowledgeCommands(program: Command): void {
     print(options.json ? explanation : `${statement.id}\n${statement.body}\nstatus: ${statement.status}\nscope: ${JSON.stringify(statement.scope)}\nrevision: ${statement.revisionNumber}\nevidence:\n${evidence.map((item) => `- ${item.kind}: ${item.summary}`).join("\n")}`, Boolean(options.json));
   });
 
-  program.command("review [candidate-id]").description("Review an agent-proposed context update").option("--accept").option("--reject").option("--defer").option("--note <text>").action(async (candidateId, options) => {
+  program.command("review [candidate-id]").description("Review an agent-proposed context update").option("--accept").option("--edit", "edit and accept").option("--reject").option("--defer").option("--explain").option("--note <text>").action(async (candidateId, options) => {
     const workspace = await openWorkspace(process.cwd());
     const candidates = workspace.database.listCandidates(workspace.repositoryId);
     if (candidates.length === 0) return print("No pending candidates.");
     const id = candidateId ?? await select({ message: "Candidate", choices: candidates.map((candidate) => ({ name: `${candidate.id}: ${candidate.proposal.operation} — ${candidate.proposal.body ?? candidate.proposal.targetStatementId}`, value: candidate.id })) });
-    let decision: "accept" | "reject" | "defer" | undefined = options.accept ? "accept" : options.reject ? "reject" : options.defer ? "defer" : undefined;
-    decision ??= await select({ message: "Decision", choices: ["accept", "reject", "defer"].map((value) => ({ name: value, value: value as "accept" | "reject" | "defer" })) });
-    const resolved = workspace.database.resolveCandidate(id, decision, humanActor, options.note);
+    const candidate = candidates.find((item) => item.id === id);
+    if (!candidate) throw new Error(`Pending candidate ${id} was not found`);
+    const proposedConfidence = candidate.proposal.attributes && "confidence" in candidate.proposal.attributes ? String(candidate.proposal.attributes.confidence) : "n/a";
+    const targetConflict = candidate.target ? workspace.database.hasContradictoryEvidence(candidate.target.id) : false;
+    print([
+      `${candidate.id} — ${candidate.proposal.operation}`,
+      `old: ${candidate.target?.body ?? "(new statement)"}`,
+      `new: ${candidate.proposal.body ?? candidate.target?.body ?? "(unchanged)"}`,
+      `scope: ${JSON.stringify(candidate.proposal.scope ?? candidate.target?.scope ?? null)}`,
+      `confidence: ${proposedConfidence}`,
+      `rationale: ${candidate.proposal.rationale}`,
+      `evidence: ${candidate.evidence.length ? candidate.evidence.map((item) => `${String(item.kind)} at ${String(item.head_commit_sha ?? "uncommitted")}`).join(", ") : "proposal notes/paths only"}`,
+      `contradictions: ${targetConflict ? "reviewed contradictory evidence exists" : "none recorded"}`
+    ].join("\n"));
+    if (options.explain) return;
+    let action: "accept" | "edit" | "reject" | "defer" | "explain" | undefined = options.edit ? "edit" : options.accept ? "accept" : options.reject ? "reject" : options.defer ? "defer" : undefined;
+    action ??= await select({ message: "Decision", choices: [
+      { name: "accept", value: "accept" as const },
+      { name: "edit and accept", value: "edit" as const },
+      { name: "reject", value: "reject" as const },
+      { name: "defer", value: "defer" as const },
+      { name: "explain only", value: "explain" as const }
+    ] });
+    if (action === "explain") return;
+    let edited: CandidateProposal | undefined;
+    if (action === "edit") {
+      const body = candidate.proposal.operation === "confirm" || candidate.proposal.operation === "contradict" || candidate.proposal.operation === "satisfy" || candidate.proposal.operation === "retire"
+        ? candidate.proposal.body
+        : await input({ message: "Statement text:", default: candidate.proposal.body ?? candidate.target?.body ?? "" });
+      const rationale = await input({ message: "Rationale:", default: candidate.proposal.rationale });
+      edited = CandidateProposalSchema.parse({ ...candidate.proposal, ...(body ? { body } : {}), rationale });
+    }
+    const decision = action === "reject" ? "reject" : action === "defer" ? "defer" : "accept";
+    const resolved = workspace.database.resolveCandidate(id, decision, humanActor, options.note, edited);
     print(resolved ? `Accepted as ${resolved.id} revision ${resolved.revisionNumber}` : `${decision}ed ${id}`);
   });
 }

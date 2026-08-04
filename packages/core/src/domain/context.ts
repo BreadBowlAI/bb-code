@@ -7,6 +7,13 @@ export type ContextItem = CurrentStatement & {
   semanticRank?: number;
   freshness: "fresh" | "stale" | "unknown";
   applicabilityReason: string;
+  conflict?: boolean;
+};
+
+export type StatementApplicability = {
+  applies: boolean;
+  freshness: "fresh" | "stale" | "unknown";
+  reason: string;
 };
 
 export type ContextResult = {
@@ -14,5 +21,6 @@ export type ContextResult = {
   runId?: string;
   items: ContextItem[];
   rendered: string;
+  conflicts: string[];
   providerStatus: Record<string, unknown>;
 };

@@ -147,6 +147,11 @@ Never send:
 Filtering and QKV scores are not authorization boundaries. bb-code must apply
 current local policy after hydration.
 
+Search input is a bounded deterministic term/path projection of the active
+task. The open runtime removes code blocks, obvious secret assignments,
+authorization values, and high-entropy tokens before transport; it does not
+send the locally stored raw prompt or use another LLM to rewrite it.
+
 ## Failure and fallback contract
 
 QKV is optional and must remain outside latency-critical correctness:

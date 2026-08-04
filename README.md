@@ -30,7 +30,8 @@ Requires Node.js 24 or newer and pnpm 11.
 ```sh
 pnpm install
 pnpm build
-pnpm --filter @breadbowl/bb-code link --global
+cd apps/cli
+npm link
 
 cd your-project
 bb init
@@ -60,7 +61,7 @@ bb add intent|belief|commitment
 bb status
 bb context "<task>" [--path <path>] [--json]
 bb explain <statement-id> [--json]
-bb review [candidate-id] [--accept|--reject|--defer]
+bb review [candidate-id] [--accept|--edit|--reject|--defer|--explain]
 bb qkv enable|disable|status
 bb sync
 bb mcp serve
@@ -72,7 +73,7 @@ bb mcp serve
 
 The runtime, adapters, plugins, schemas, local ranking, and review flow are Apache-2.0. SQLite is the source of truth. QKV is an optional semantic candidate generator behind the `SemanticRetrievalProvider` interface; local FTS5 continues working when QKV is absent or unavailable.
 
-QKV receives only the current statement ID, revision ID, kind, and statement text. bb-code does not send source code, prompts, tool input/output, diffs, or transcripts. Set `BB_QKV_URL` and `BB_QKV_API_KEY`, then run `bb qkv enable` and `bb sync` to opt in.
+QKV receives only reviewed current statement text, stable statement/revision IDs, kind, status, scope, reviewed rationale/success conditions, a short reviewed evidence summary, and a bounded secret-filtered retrieval-query projection. bb-code does not send source code, stored/raw prompts, tool input/output, diffs, environment values, secrets, or transcripts. Set `BB_QKV_API_URL` and `BB_QKV_API_KEY`, then run `bb qkv enable --yes` and `bb sync` to opt in. `BB_QKV_URL` remains a temporary deprecated alias.
 
 ## Development
 
@@ -82,6 +83,9 @@ pnpm test
 pnpm build
 pnpm check:docs
 pnpm validate:plugins
+pnpm smoke:package
+pnpm test:concurrency
+pnpm test:performance
 ```
 
 Start with the [documentation index](docs/README.md). It links the complete

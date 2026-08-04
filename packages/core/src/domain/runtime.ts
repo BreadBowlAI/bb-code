@@ -46,7 +46,10 @@ export type GitView = {
   root: string;
   headCommitSha: string;
   headTreeSha: string;
+  parentShas: string[];
   dirtyFingerprint: string;
+  changedPaths: string[];
+  stablePatchId?: string;
   branchLabel?: string;
   observedAt: string;
 };

@@ -12,4 +12,6 @@ The schema has five groups:
 
 Every statement has a kind-specific status and attributes. “Proposed” is never a statement status because proposals are separate records. `current_revision_id` is the only mutable knowledge pointer. Accepting a candidate appends a revision and advances that pointer in one transaction.
 
+Migration v2 is additive: Git views gain parents, stable patch IDs, and changed paths; run events gain Git linkage, external-event deduplication, and consequential classification; candidates preserve a separate accepted edit and link evidence; context effects link to the retrieval that actually supplied the statement. Repository-scoped indexes keep search and job hydration isolated.
+
 SQLite uses WAL, foreign keys, normal synchronous mode, and a five-second busy timeout. IDs are ULIDs with readable prefixes such as `repo_`, `run_`, `bel_`, and `com_`.

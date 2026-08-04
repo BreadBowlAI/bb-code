@@ -1,0 +1,25 @@
+name: QKV live integration
+
+on:
+  workflow_dispatch:
+
+jobs:
+  live-qkv:
+    runs-on: ubuntu-latest
+    environment: qkv-integration
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test:qkv-live
+        env:
+          BB_QKV_API_URL: ${{ secrets.BB_QKV_API_URL }}
+          BB_QKV_API_KEY: ${{ secrets.BB_QKV_API_KEY }}
+          BB_QKV_TEST_INDEX_ID: ${{ secrets.BB_QKV_TEST_INDEX_ID }}

@@ -12,9 +12,14 @@
     "typecheck": "pnpm -r typecheck && tsc -p tsconfig.tests.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:acceptance": "vitest run packages/core/tests/integration/acceptance/cross-agent-mvp-flow.test.ts packages/core/tests/integration/git/feature-belief-merge.test.ts packages/core/tests/integration/git/changed-blob-freshness.test.ts packages/core/tests/integration/context/semantic-fallback.test.ts packages/core/tests/unit/application/context-token-budget.test.ts apps/cli/tests/unit/mcp/four-tool-contract.test.ts",
+    "test:performance": "node scripts/performance-smoke.mjs",
+    "test:concurrency": "node scripts/concurrency-smoke.mjs",
+    "test:qkv-live": "node scripts/qkv-live-smoke.mjs",
+    "smoke:package": "node scripts/package-smoke.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",
     "check:docs": "node scripts/check-docs.mjs",
-    "validate:plugins": "python3 scripts/validate_plugins.py"
+    "validate:plugins": "node scripts/run-plugin-validation.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

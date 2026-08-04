@@ -79,8 +79,11 @@ export const CandidateProposalSchema = z.object({
       const parsed = attributesSchemaFor(proposal.kind).safeParse(proposal.attributes);
       if (!parsed.success) context.addIssue({ code: "custom", message: parsed.error.message, path: ["attributes"] });
     }
-  } else if (!proposal.targetStatementId) {
-    context.addIssue({ code: "custom", message: `${proposal.operation} requires targetStatementId`, path: ["targetStatementId"] });
+  } else {
+    if (!proposal.targetStatementId) context.addIssue({ code: "custom", message: `${proposal.operation} requires targetStatementId`, path: ["targetStatementId"] });
+    if (proposal.operation === "revise" && proposal.body === undefined && proposal.scope === undefined && proposal.attributes === undefined) {
+      context.addIssue({ code: "custom", message: "revise requires at least one changed field", path: ["operation"] });
+    }
   }
 });
 export type CandidateProposal = z.infer<typeof CandidateProposalSchema>;
@@ -104,5 +107,23 @@ export type StatementDraft = {
   scope: Scope;
   attributes: StatementAttributes;
   actor: ActorRef;
-  evidence: { kind: string; summary: string; paths?: string[]; runId?: string; gitViewId?: string };
+  evidence: {
+    kind: string;
+    summary: string;
+    paths?: string[];
+    pathBlobs?: Record<string, string>;
+    runId?: string;
+    gitViewId?: string;
+  };
 };
+
+export function validateStatementValues(input: {
+  kind: StatementKind;
+  status: StatementStatus;
+  attributes: StatementAttributes;
+}): StatementAttributes {
+  if (!statusesFor(input.kind).includes(input.status)) {
+    throw new Error(`Status ${input.status} is not valid for ${input.kind}`);
+  }
+  return attributesSchemaFor(input.kind).parse(input.attributes) as StatementAttributes;
+}

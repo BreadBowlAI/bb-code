@@ -8,6 +8,8 @@ packages/core/tests/
     domain/          schema and invariant tests
     application/     pure ranking and rendering tests
   integration/
+    context/         provider failure and fallback tests
+    git/             real temporary Git lifecycle tests
     sqlite/          real SQLite state-transition tests
   support/           reusable fixtures; never test cases
 
@@ -24,10 +26,19 @@ Commands:
 ```sh
 pnpm test
 pnpm test:watch
+pnpm test:acceptance
 pnpm typecheck
 pnpm check:architecture
+pnpm build
+pnpm smoke:package
+pnpm test:concurrency
+pnpm test:performance
 ```
 
 `pnpm typecheck` checks production and test TypeScript. The default test command finds tests only under explicit `tests` directories, preventing production files from becoming accidental test containers.
+
+The acceptance command exercises the cross-agent Codex → pending proposal → human review → Claude retrieval flow and composes the branch visibility, changed-blob freshness, semantic fallback, token-budget, and four-tool contract scenarios into one release gate.
+
+CI runs these checks on macOS, Linux, and Windows with Node 24. Live QKV is a separate manually dispatched workflow protected by dedicated tenant credentials; normal tests inject transport fakes and assert that private run data never reaches remote documents. The final consequential-recall release proof is a real dogfood observation and cannot be replaced by the deterministic acceptance fixture.
 
 `pnpm check:architecture` enforces the core dependency direction and rejects tests placed under production source.
