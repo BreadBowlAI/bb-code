@@ -3,10 +3,9 @@
     "target": "ES2023",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "baseUrl": ".",
     "paths": {
-      "@breadbowl/bb-core": ["packages/core/src/index.ts"],
-      "@breadbowl/bb-qkv-client": ["packages/qkv-client/src/index.ts"]
+      "@breadbowl/bb-core": ["./packages/core/src/index.ts"],
+      "@breadbowl/bb-qkv-client": ["./packages/qkv-client/src/index.ts"]
     },
     "lib": ["ES2023"],
     "strict": true,
