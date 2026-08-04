@@ -1,0 +1,11 @@
+{
+  "description": "Inject bb-code context and capture safe lifecycle evidence",
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "bb adapter claude SessionStart" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "bb adapter claude UserPromptSubmit" }] }],
+    "PreToolUse": [{ "hooks": [{ "type": "command", "command": "bb adapter claude PreToolUse" }] }],
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "bb adapter claude PostToolUse" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "bb adapter claude Stop" }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "bb adapter claude SessionEnd" }] }]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "bb adapter codex SessionStart" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "bb adapter codex UserPromptSubmit" }] }],
+    "PreToolUse": [{ "hooks": [{ "type": "command", "command": "bb adapter codex PreToolUse" }] }],
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "bb adapter codex PostToolUse" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "bb adapter codex Stop" }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "bb adapter codex SessionEnd" }] }]
+  }
+}

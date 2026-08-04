@@ -1,0 +1,6 @@
+{
+  "bb-code": {
+    "command": "bb",
+    "args": ["mcp", "serve"]
+  }
+}

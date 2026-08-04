@@ -1,0 +1,12 @@
+{
+  "name": "bb-code",
+  "owner": { "name": "BreadBowl" },
+  "plugins": [
+    {
+      "name": "bb-code",
+      "description": "Durable project context for software engineering agents",
+      "version": "0.1.0",
+      "source": "./plugins/claude/bb-code"
+    }
+  ]
+}

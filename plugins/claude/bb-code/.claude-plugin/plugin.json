@@ -1,0 +1,7 @@
+{
+  "name": "bb-code",
+  "version": "0.1.0",
+  "description": "Durable project context for software engineering agents",
+  "author": { "name": "BreadBowl" },
+  "license": "Apache-2.0"
+}

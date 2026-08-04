@@ -1,0 +1,94 @@
+# bb-code
+
+bb-code is the continuity layer for software engineering agents. It gives Codex and Claude Code the same durable project context without replacing either agent, parsing private transcripts, or letting an agent silently rewrite the project's memory.
+
+The MVP stores three deliberately ordinary concepts:
+
+- **Intents** — outcomes the project is actively pursuing.
+- **Beliefs** — useful but fallible claims about the codebase or environment.
+- **Commitments** — constraints and decisions that require explicit authority.
+
+Statements are immutable revisions backed by evidence. Agent-authored changes enter a candidate queue; only `bb review` makes them durable.
+
+## Why this layer
+
+Coding agents are already good at editing code. What disappears between tasks is the reasoning that should constrain the next task: why an API must stay compatible, which assumption is uncertain, or what success means. bb-code sits beside the coding agent as a standalone local runtime:
+
+```text
+Codex / Claude Code
+  lifecycle hooks ──> host adapter ──> bb-code core ──> SQLite + FTS5
+  MCP tools <──────────────────────────────┘              │
+                                                          └─> optional QKV
+```
+
+Hooks provide reliable task timing. MCP gives the agent four explicit operations. The core imports no host-specific or QKV code, so OpenCode and other adapters can be added without changing the domain.
+
+## Quick start
+
+Requires Node.js 24 or newer and pnpm 11.
+
+```sh
+pnpm install
+pnpm build
+pnpm --filter @breadbowl/bb-code link --global
+
+cd your-project
+bb init
+bb integrate codex
+bb status
+bb context "add OAuth login"
+```
+
+Install `plugins/bb-code` through the included Codex marketplace, or add `.claude-plugin/marketplace.json` to Claude Code and install its plugin. Both expect the `bb` executable on `PATH`.
+
+## The four agent tools
+
+- `bb_context` retrieves applicable context for a task and returns the active run ID when hooks started the run.
+- `bb_explain` returns one statement's typed current revision.
+- `bb_propose_update` queues one proposed learning for human review.
+- `bb_finish_run` records the outcome, verification, context effects, and zero or more proposals.
+
+There is intentionally no `accept` MCP tool.
+
+## CLI
+
+```text
+bb init
+bb integrate codex|claude
+bb doctor
+bb add intent|belief|commitment
+bb status
+bb context "<task>" [--path <path>] [--json]
+bb explain <statement-id> [--json]
+bb review [candidate-id] [--accept|--reject|--defer]
+bb qkv enable|disable|status
+bb sync
+bb mcp serve
+```
+
+`bb add commitment` always asks for explicit confirmation unless `--yes` is supplied by the human running the command.
+
+## Local and proprietary boundaries
+
+The runtime, adapters, plugins, schemas, local ranking, and review flow are Apache-2.0. SQLite is the source of truth. QKV is an optional semantic candidate generator behind the `SemanticRetrievalProvider` interface; local FTS5 continues working when QKV is absent or unavailable.
+
+QKV receives only the current statement ID, revision ID, kind, and statement text. bb-code does not send source code, prompts, tool input/output, diffs, or transcripts. Set `BB_QKV_URL` and `BB_QKV_API_KEY`, then run `bb qkv enable` and `bb sync` to opt in.
+
+## Development
+
+```sh
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm check:docs
+pnpm validate:plugins
+```
+
+Start with the [documentation index](docs/README.md). It links the complete
+product vision, original MVP specification, current implementation contract,
+architecture, data model, glossary, privacy rules, testing guidance, and QKV's
+public competitive and integration boundary.
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).

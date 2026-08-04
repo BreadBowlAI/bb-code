@@ -1,0 +1,20 @@
+{
+  "name": "bb-code",
+  "version": "0.1.0",
+  "description": "Durable project context for software engineering agents",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "BreadBowl"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Bb Code",
+    "shortDescription": "Keep project beliefs and commitments across tasks.",
+    "longDescription": "bb-code gives Codex Git-aware project context, records task outcomes, and queues durable updates for human review.",
+    "developerName": "BreadBowl",
+    "category": "Productivity",
+    "capabilities": ["MCP tools", "lifecycle hooks", "project bootstrap skill"],
+    "defaultPrompt": "Use bb-code context while working and propose durable learnings for review."
+  },
+  "mcpServers": "./.mcp.json"
+}

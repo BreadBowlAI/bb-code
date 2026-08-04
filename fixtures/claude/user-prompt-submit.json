@@ -1,0 +1,7 @@
+{
+  "session_id": "claude-fixture-session",
+  "turn_id": "claude-fixture-turn",
+  "cwd": ".",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "Add a status endpoint"
+}

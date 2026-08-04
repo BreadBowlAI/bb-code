@@ -1,0 +1,182 @@
+# Glossary
+
+These definitions are part of the product contract. Prefer them over generic
+terms such as “memory”.
+
+## Knowledge
+
+### Intent
+
+An outcome that an authorized person or process wants to become true. An intent
+has an owner, scope, priority, success conditions, status, and provenance.
+
+### Belief
+
+A fallible claim about the project or its environment. A belief carries
+confidence and evidence and may later be contradicted or superseded.
+
+### Commitment
+
+An accepted decision, invariant, or constraint that future work must respect.
+An agent may propose one, but acceptance requires human or policy authority.
+
+### Evidence
+
+An observed fact or artifact linked to a source and, where relevant, a Git view.
+Evidence can support, contradict, or explain a statement. Evidence is not
+automatically durable knowledge.
+
+### Statement
+
+The shared container for an intent, belief, or commitment. A statement points
+to its current immutable revision.
+
+### Statement revision
+
+One immutable version of a statement's body, status, scope, attributes, and
+evidence links. Updating a statement appends a revision and advances the current
+revision pointer in one transaction.
+
+### Candidate update
+
+An unaccepted proposal to create, revise, confirm, contradict, satisfy,
+supersede, or retire a statement. Candidates remain separate from durable
+knowledge until human review.
+
+## Agent execution
+
+### Intern
+
+The product-facing metaphor for a coding agent assigned scoped work. An intern
+can inspect, act, gather evidence, and propose learning, but cannot grant itself
+authority. The persisted implementation uses the terms agent session and run.
+
+### Agent session
+
+A correlation record for one host's session in one repository worktree. It
+connects Codex or Claude Code's external session ID to bb-code's stable local
+identity. It can contain multiple runs.
+
+### Run
+
+One task or turn of agent work: prompt received, context retrieved, tools
+observed, outcome recorded, and candidate updates proposed. A run belongs to an
+agent session and has start and end Git views.
+
+### Run event
+
+A normalized lifecycle observation such as task start, before tool, after tool,
+finish task, or session end. Host-specific JSON is translated at the adapter
+boundary before a run event reaches the core.
+
+### Verification
+
+Structured evidence about whether the task outcome was checked, such as a test,
+build, lint run, or manual verification and its result.
+
+### Context effect
+
+The coding agent's structured report of how one retrieved statement affected
+the task. The MVP values are `changed_plan`, `caused_clarification`,
+`avoided_violation`, `changed_verification`, and `no_effect`.
+
+The coding agent generates this report because only it has direct access to its
+reasoning and actions. bb-code validates and stores the report for evaluation;
+retrieval alone is not proof that context was useful.
+
+## Integration
+
+### Host
+
+The coding tool running the agent, initially Codex or Claude Code. Host-specific
+types are delivery concerns and do not enter the core domain.
+
+### Adapter
+
+A deterministic translator from supported host lifecycle events to bb-code's
+normalized runtime protocol.
+
+### Hook
+
+A host-controlled lifecycle callback. bb-code uses hooks for reliable timing:
+task start, before and after tools, completion, compaction recovery, and session
+end where supported.
+
+### MCP server
+
+The bb-code process that exposes model-callable tools through the Model Context
+Protocol. The four bb-code MCP tools are not the hooks: MCP provides explicit
+agent operations, while hooks decide when integration code runs.
+
+### `bb_context`
+
+Retrieves the small set of currently applicable statements for a task and
+optional paths.
+
+### `bb_explain`
+
+Returns a statement with its current revision, history, scope, and evidence so
+the agent or user can understand why it applies.
+
+### `bb_propose_update`
+
+Queues one candidate update for human review. It cannot make the proposal
+durable.
+
+### `bb_finish_run`
+
+The structured end-of-task boundary. It records outcome, summary, verification,
+context effects, and zero or more pending proposals.
+
+## Git
+
+### Repository
+
+The stable logical project identified by `.bb/repo.json`. It is not identified
+by a branch name or filesystem path.
+
+### Repository location
+
+A local clone associated with the stable repository identity.
+
+### Worktree
+
+A Git checkout in which an agent can work. One repository location can have
+multiple worktrees.
+
+### Git view
+
+A snapshot of applicability context at an observation boundary: repository,
+worktree, commit SHA, tree SHA, dirty fingerprint, and optional branch label.
+
+### Dirty fingerprint
+
+A deterministic digest derived from the identities of staged, unstaged, and
+untracked paths. It distinguishes uncommitted views without persisting source
+content.
+
+## Persistence
+
+### FK
+
+Foreign key. A database field whose value must reference an existing row in
+another table. For example, `runs.agent_session_id` is an FK to an agent session.
+SQLite foreign-key enforcement prevents records from pointing at missing
+parents.
+
+### FTS5
+
+SQLite's full-text search extension. It is the local, account-free lexical
+retrieval baseline.
+
+### QKV
+
+The optional proprietary semantic retrieval provider. It produces candidate
+statement references and relevance scores; it is not the source of truth and
+does not decide whether a statement is applicable.
+
+### Hydration
+
+Loading the authoritative current statement revision from local SQLite after a
+retriever returns an identifier. The remote QKV result is a reference, not the
+final context object.

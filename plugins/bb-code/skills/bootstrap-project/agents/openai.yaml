@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bootstrap bb-code"
+  short_description: "Extract reviewed project beliefs and commitments"
+  default_prompt: "Use $bootstrap-project to inspect this repository and propose durable bb-code context for review."
