@@ -39,6 +39,6 @@ pnpm test:performance
 
 The acceptance command exercises the cross-agent Codex → pending proposal → human review → Claude retrieval flow and composes the branch visibility, changed-blob freshness, semantic fallback, token-budget, and four-tool contract scenarios into one release gate.
 
-CI runs these checks on macOS and Linux with Node 24. The normal test suite already includes the acceptance flow, so CI does not run that subset twice. Live QKV is a separate manually dispatched workflow protected by dedicated tenant credentials; normal tests inject transport fakes and assert that private run data never reaches remote documents. The final consequential-recall release proof is a real dogfood observation and cannot be replaced by the deterministic acceptance fixture.
+CI runs functional checks on macOS and Linux with Node 24. The normal test suite already includes the acceptance flow, so CI does not run that subset twice. The performance threshold runs once on Ubuntu to avoid treating shared-runner timing differences as platform correctness failures. Live QKV is a separate manually dispatched workflow protected by dedicated tenant credentials; normal tests inject transport fakes and assert that private run data never reaches remote documents. The final consequential-recall release proof is a real dogfood observation and cannot be replaced by the deterministic acceptance fixture.
 
 `pnpm check:architecture` enforces the core dependency direction and rejects tests placed under production source.

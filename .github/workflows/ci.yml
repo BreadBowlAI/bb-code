@@ -33,3 +33,4 @@ jobs:
       - run: pnpm smoke:package
       - run: pnpm test:concurrency
       - run: pnpm test:performance
+        if: matrix.os == 'ubuntu-latest'
