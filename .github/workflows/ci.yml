@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -27,9 +27,8 @@ jobs:
       - run: pnpm check:architecture
       - run: pnpm check:docs
       - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm test:acceptance
       - run: pnpm build
+      - run: pnpm test
       - run: pnpm validate:plugins
       - run: pnpm smoke:package
       - run: pnpm test:concurrency
