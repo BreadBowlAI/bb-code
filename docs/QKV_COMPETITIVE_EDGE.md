@@ -1,10 +1,10 @@
 # QKV competitive edge and integration boundary
 
 Status: public product and provider contract  
-Updated: 2026-08-04
+Updated: 2026-08-05
 
 QKV is bb-code's optional proprietary semantic retrieval provider. It improves
-which statements become candidates for a task; it does not own project truth,
+which statements become candidates for a request; it does not own project truth,
 authority, scope, revisions, Git applicability, or the final context shown to
 an agent.
 
@@ -23,12 +23,12 @@ constraint:
 Earlier commitment
   "Accounts remain optional. Local data is authoritative."
 
-Later task
+Later request
   "Add cross-device sync and resolve conflicts on the server."
 ```
 
 A useful continuity system must recover the earlier decision even when the
-task does not repeat its vocabulary. It must also distinguish a relevant
+request does not repeat its vocabulary. It must also distinguish a relevant
 constraint from merely similar text. Better candidate recall creates the
 opportunity for bb-code's transparent policy layer to prevent a mistake.
 
@@ -51,7 +51,7 @@ value interaction   -> more precise reranking
 The high-level advantages are:
 
 - **More than one semantic facet.** Multiple slots can preserve distinct parts
-  of a task or statement that a single pooled vector may blur together.
+  of a request or statement that a single pooled vector may blur together.
 - **Routing and content are separated.** Routing vectors answer where a match
   may be; value vectors help decide what information the routed match carries.
 - **Late-interaction quality with bounded representation size.** Learned slots
@@ -71,13 +71,13 @@ The research hypothesis is concise:
 
 ## Why QKV fits bb-code
 
-An engineering task is usually multi-faceted: desired outcome, affected paths,
+An engineering request is usually multi-faceted: desired outcome, affected paths,
 architectural constraints, failure symptoms, and verification expectations can
 all appear together. Durable statements are also typed and scoped. QKV's
 multi-vector representation is intended to improve recall when one facet of the
-new task matches one consequential facet of an older statement.
+new request matches one consequential facet of an older statement.
 
-QKV still cannot decide whether the retrieved statement should govern the task.
+QKV still cannot decide whether the retrieved statement should govern the request.
 That decision requires bb-code's open policy layer:
 
 1. QKV returns candidate statement and revision IDs with scores.
@@ -148,7 +148,7 @@ Filtering and QKV scores are not authorization boundaries. bb-code must apply
 current local policy after hydration.
 
 Search input is a bounded deterministic term/path projection of the active
-task. The open runtime removes code blocks, obvious secret assignments,
+request. The open runtime removes code blocks, obvious secret assignments,
 authorization values, and high-entropy tokens before transport; it does not
 send the locally stored raw prompt or use another LLM to rewrite it.
 
@@ -159,7 +159,7 @@ QKV is optional and must remain outside latency-critical correctness:
 - local FTS5 always remains available;
 - semantic search uses a bounded timeout;
 - network, authentication, parsing, or service errors degrade to lexical
-  candidates rather than failing task start;
+  candidates rather than failing run start;
 - queued indexing is idempotent and tied to a specific current revision;
 - deleting or superseding a local revision eventually removes its remote search
   document;
@@ -174,7 +174,7 @@ The proprietary advantage should be demonstrated through product outcomes, not
 asserted from model architecture alone.
 
 Offline retrieval evaluation should compare local FTS5, conventional semantic
-baselines, and QKV on representative task-to-statement judgments using recall,
+baselines, and QKV on representative request-to-statement judgments using recall,
 MRR or nDCG, latency, and failure rate.
 
 The decisive bb-code metrics are downstream:

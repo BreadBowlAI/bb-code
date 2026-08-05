@@ -1,6 +1,6 @@
 # bb-code: Product Definition and MVP
 
-Updated: 2026-07-31
+Updated: 2026-08-05
 
 > **Document role:** Product definition, rationale, and architectural context.
 > Implement the MVP from
@@ -11,7 +11,7 @@ Updated: 2026-07-31
 
 > **bb-code gives every coding agent the same current understanding of what a project wants, what is believed to be true, and what decisions must be respected.**
 
-Coding agents are becoming interchangeable. A developer may use Codex for one task, Claude Code for another, Cursor in the editor, and an automated agent in CI. Each agent can inspect the repository, but each begins without the accumulated understanding behind the repository.
+Coding agents are becoming interchangeable. A developer may send one request to Codex, another to Claude Code, work with Cursor in the editor, and use an automated agent in CI. Each agent can inspect the repository, but each begins without the accumulated understanding behind the repository.
 
 That is the opening for bb-code.
 
@@ -133,11 +133,14 @@ authority
 scope
 revisit condition
 valid from
-status: proposed | accepted | superseded | retired
+status: accepted | superseded | retired
 provenance
 ```
 
-An agent must never silently create an accepted commitment. It may propose one. Acceptance requires explicit user approval, an approved design decision, a merged change with clear authority, or a future team policy.
+An agent must never silently create an accepted commitment. It may propose one
+through a candidate update, but `proposed` is not a commitment status.
+Acceptance requires explicit user approval, an approved design decision, a
+merged change with clear authority, or a future team policy.
 
 ### Evidence
 
@@ -159,7 +162,7 @@ Evidence is not automatically true. It supports, contradicts, or explains a stat
 
 The implementation also needs:
 
-- `Run`: one agent task in one repository and worktree;
+- `Run`: one prompt-to-stop agent execution in one repository and worktree;
 - `RunEvent`: a normalized prompt, tool call, file change, test result, or outcome;
 - `CandidateUpdate`: a proposed creation, revision, contradiction, satisfaction, or supersession of a durable statement;
 - `StatementRevision`: immutable history for every change to an intent, belief, or commitment.
@@ -176,7 +179,7 @@ These are product invariants, not optional implementation details:
 4. Agents may automatically propose beliefs.
 5. Agents may propose intents and commitments, but cannot accept them.
 6. Code and tests can change a belief; they cannot decide what the user wants.
-7. A newer task does not automatically replace a longer-lived intent.
+7. A newer request does not automatically replace a longer-lived intent.
 8. Accepted commitments do not decay merely because they are old.
 9. Retrieval returns the currently applicable revision and can explain why it was selected.
 10. When the evidence is weak or conflicting, bb-code exposes uncertainty instead of manufacturing certainty.
@@ -207,8 +210,8 @@ Tools and repository             retrieval and review
 
 It must interact with four points in an agent run:
 
-1. **Before the agent processes a task**
-   - record the immediate task intent;
+1. **Before the agent processes a request**
+   - record the immediately requested outcome;
    - retrieve applicable intents, beliefs, and commitments;
    - inject a small, cited context block.
 
@@ -221,7 +224,7 @@ It must interact with four points in an agent run:
    - record changed paths, test outcomes, errors, and commit state;
    - do not store all terminal chatter as durable knowledge.
 
-4. **When the task finishes**
+4. **When the run finishes**
    - decide whether the requested outcome was actually verified;
    - propose updates to beliefs, intents, or commitments;
    - ask the user to approve consequential updates.
@@ -237,17 +240,18 @@ The primary integration is a small deterministic adapter for each agent runtime.
 Every adapter translates native lifecycle events into the same bb-code events:
 
 ```text
-start_task
+session_start
+start_run
 before_tool
 after_tool
-finish_task
-end_session
+finish_run
+session_end
 ```
 
 The normalized contract should look roughly like:
 
 ```text
-start_task
+start_run
 - adapter
 - agent session id
 - repository/worktree
@@ -266,7 +270,7 @@ after_tool
 - changed paths
 - compact evidence
 
-finish_task
+finish_run
 - run id
 - final response
 - verification summary
@@ -288,17 +292,17 @@ bb_propose_update
 bb_finish_run
 ```
 
-- `bb_context` returns relevant current statements for a task or path.
+- `bb_context` returns relevant current statements for a request or path.
 - `bb_explain` hydrates a statement, its revisions, and its evidence.
 - `bb_propose_update` creates a candidate for review; it never silently accepts a commitment.
 - `bb_finish_run` records the run outcome, verification, context effects, and
   zero or more final candidate updates. Its candidates also require review.
 
-`bb_finish_run` is the reliable end-of-task learning boundary. The active
+`bb_finish_run` is the reliable end-of-run learning boundary. The active
 coding agent uses its existing reasoning to submit structured learning; bb-code
 does not require a hidden second extraction model or another model API key.
 
-MCP is valuable because many agents support it, but MCP tools are generally model-controlled. The model can forget or choose not to call them. The runtime adapter provides deterministic task-start retrieval and task-end integration.
+MCP is valuable because many agents support it, but MCP tools are generally model-controlled. The model can forget or choose not to call them. The runtime adapter provides deterministic run-start retrieval and run-end integration.
 
 Agents without lifecycle hooks receive a degraded but still useful integration:
 
@@ -320,7 +324,7 @@ Use native lifecycle hooks plus a bb-code MCP server.
 | bb-code moment | Codex hook | Claude Code hook |
 |---|---|---|
 | Start or resume a session | `SessionStart` | `SessionStart` |
-| Receive a new task | `UserPromptSubmit` | `UserPromptSubmit` |
+| Receive a new request | `UserPromptSubmit` | `UserPromptSubmit` |
 | Inspect an intended action | `PreToolUse` | `PreToolUse` |
 | Observe evidence from an action | `PostToolUse` | `PostToolUse`, `PostToolUseFailure`, `PostToolBatch` |
 | Recover context around compaction | `PreCompact`, `PostCompact`, compact-sourced `SessionStart` | `PreCompact`, compact-sourced `SessionStart` |
@@ -430,11 +434,12 @@ The MVP should implement only host-native mode.
 The normalized adapter API remains:
 
 ```text
-start_task
+session_start
+start_run
 before_tool
 after_tool
-finish_task
-end_session
+finish_run
+session_end
 ```
 
 Native session and turn IDs should be stored as external correlation IDs, never
@@ -466,11 +471,12 @@ Ship a Codex plugin containing:
 
 ```text
 hooks/hooks.json
-  UserPromptSubmit -> bb hook start-task
-  PreToolUse       -> bb hook before-tool
-  PostToolUse      -> bb hook after-tool
-  Stop             -> bb hook finish-task
-  SessionEnd       -> bb hook end-session
+  SessionStart     -> bb adapter codex SessionStart     -> session_start
+  UserPromptSubmit -> bb adapter codex UserPromptSubmit -> start_run
+  PreToolUse       -> bb adapter codex PreToolUse        -> before_tool
+  PostToolUse      -> bb adapter codex PostToolUse       -> after_tool
+  Stop             -> bb adapter codex Stop              -> finish_run
+  SessionEnd       -> bb adapter codex SessionEnd        -> session_end
 
 .mcp.json
   bb_context
@@ -482,7 +488,7 @@ skills/
   a small optional workflow for explicit review and explanation
 ```
 
-At task start, `bb hook start-task` should retrieve and return a compact
+At run start, `bb adapter codex UserPromptSubmit` should retrieve and return a compact
 developer-context block containing the run ID and an instruction to call
 `bb_finish_run` before stopping. After tool use, the adapter should record
 selected evidence without running expensive extraction synchronously.
@@ -631,7 +637,7 @@ MCP is an excellent protocol for tools and external context. It does not guarant
 
 ### Not `AGENTS.md`, `CLAUDE.md`, or rules files alone
 
-Those are good for small, static, always-applicable instructions. They are poor stores for numerous scoped beliefs, temporal validity, contradictory evidence, or task-specific retrieval.
+Those are good for small, static, always-applicable instructions. They are poor stores for numerous scoped beliefs, temporal validity, contradictory evidence, or request-specific retrieval.
 
 bb-code should import and cite them as evidence. It should not replace them when a simple checked-in instruction is sufficient.
 
@@ -671,7 +677,7 @@ For an empty or new project, it asks one useful question:
 
 The answer seeds initial intents and proposed commitments.
 
-### At the start of a task
+### At the start of a request
 
 The developer uses their normal coding agent:
 
@@ -705,7 +711,7 @@ Sources
 
 The important moment is not that an old note was found. It is that the agent avoids making a plausible but incompatible decision.
 
-### During the task
+### During the run
 
 Most runs should remain quiet. bb-code should not narrate every retrieval or tool call.
 
@@ -713,7 +719,7 @@ The agent can explicitly call `bb_explain` when it needs the rationale or full e
 
 The MVP should warn, not block, for semantic conflicts. Hard blocking should arrive only for accepted, machine-checkable rules after false-positive behavior is understood.
 
-### At the end of a task
+### At the end of a run
 
 bb-code presents only consequential proposed updates:
 
@@ -772,9 +778,9 @@ Build:
 - manual creation and review;
 - import from a small set of repository documents;
 - hybrid lexical and QKV retrieval;
-- compact, cited task-start context;
+- compact, cited run-start context;
 - evidence capture from changed paths and test results;
-- task-end candidate updates;
+- run-end candidate updates;
 - one deterministic runtime adapter;
 - an MCP server as the portability fallback.
 
@@ -835,10 +841,8 @@ The existing managed QKV service remains a retrieval backend. It accepts text tr
 The core should be callable as a library and through a small command protocol:
 
 ```text
-bb hook start-task
-bb hook before-tool
-bb hook after-tool
-bb hook finish-task
+bb adapter codex <native-event>
+bb adapter claude <native-event>
 ```
 
 Each command reads normalized JSON on standard input and returns structured JSON. Codex and Claude hooks can call the binary directly. The OpenCode adapter can call the same core library or protocol. This avoids requiring a daemon in the first version.
@@ -941,7 +945,7 @@ Use these defaults:
 4. A candidate update created during a run stays attached to that run's
    worktree view until a user reviews it.
 5. Knowledge supported only by a divergent branch is excluded by default. It
-   can appear as explicitly labelled parallel-branch context when the task asks
+   can appear as explicitly labelled parallel-branch context when the request asks
    about that branch or a merge.
 
 The core ancestry query is:
@@ -1064,7 +1068,7 @@ QKV should supply the semantic retrieval advantage. It should not override an in
 Default ranking behavior:
 
 - an applicable accepted commitment outranks a semantically closer old conversation;
-- an active parent intent outranks a completed task;
+- an active parent intent outranks an earlier completed run;
 - a belief with recent code or test evidence outranks an unsupported inference;
 - exact symbols, paths, errors, and ticket IDs receive lexical weight;
 - no result is better than irrelevant context.
@@ -1109,14 +1113,14 @@ Supporting metrics:
 - context-injection latency;
 - candidate acceptance, edit, and rejection rates;
 - repeated user corrections;
-- tasks requiring re-explanation;
+- requests requiring re-explanation;
 - agent outcome with and without bb-code context;
 - correct abstention when nothing relevant exists.
 
-Build a small evaluation set from real tasks in this repository:
+Build a small evaluation set from real requests in this repository:
 
 1. record an intent, belief, or commitment;
-2. create a later task where that statement matters indirectly;
+2. create a later request where that statement matters indirectly;
 3. compare the agent’s plan and result with and without bb-code;
 4. label whether the context changed the outcome;
 5. retain hard negatives where similar statements should not be injected.
@@ -1133,17 +1137,17 @@ This outcome dataset can later improve retrieval and become a defensible advanta
 - lexical retrieval;
 - hand-written records for this repository.
 
-Success: a real task receives a relevant, cited intent, belief, or commitment.
+Success: a real request receives a relevant, cited intent, belief, or commitment.
 
 ### Milestone 2: Codex integration
 
 - plugin packaging;
-- `UserPromptSubmit` task-start injection;
+- `UserPromptSubmit` run-start injection;
 - `PostToolUse` evidence capture;
 - `Stop` candidate generation;
 - visible, non-blocking conflict warnings.
 
-Success: bb-code improves a normal Codex task without the user manually invoking it.
+Success: bb-code improves a normal Codex run without the user manually invoking it.
 
 ### Milestone 3: QKV retrieval
 
@@ -1152,11 +1156,11 @@ Success: bb-code improves a normal Codex task without the user manually invoking
 - add scope, authority, validity, and diversity reranking;
 - create retrieval traces and abstention tests.
 
-Success: QKV materially beats lexical and conventional dense baselines on bb-code’s own task-to-statement benchmark.
+Success: QKV materially beats lexical and conventional dense baselines on bb-code’s own request-to-statement benchmark.
 
 ### Milestone 4: learning loop
 
-- extract a small number of candidate updates at task end;
+- extract a small number of candidate updates at run end;
 - attach evidence and affected scope;
 - approve, edit, reject, defer, and supersede;
 - measure false-positive and acceptance rates.
@@ -1195,7 +1199,7 @@ The visible value is:
 - switch agents without losing continuity;
 - catch conflicts before implementation;
 - keep decisions tied to evidence;
-- let every completed task improve the next one.
+- let every completed run improve the next request.
 
 Do not lead with embeddings, QKV slots, knowledge graphs, or “AI memory.” Those explain implementation, not value.
 
@@ -1251,10 +1255,10 @@ That is ambitious enough to become infrastructure and small enough to prove with
 
 The integration strategy follows the extension boundaries that current tools actually expose:
 
-- [Codex hooks](https://learn.chatgpt.com/docs/hooks) can inject context at prompt and session start, observe or control supported tool calls, and run at task or session completion.
+- [Codex hooks](https://learn.chatgpt.com/docs/hooks) can inject context at prompt and session start, observe or control supported tool calls, and run at Codex's native task or session completion.
 - [Codex plugin packaging](https://developers.openai.com/plugins/build/plugins) can bundle skills, MCP configuration, and lifecycle hooks.
 - [OpenCode V2 plugins](https://opencode.ai/v2/docs/build/plugins) expose a request hook immediately before model dispatch and before/after tool hooks, but the V2 plugin API is beta.
-- [Claude Code hooks](https://code.claude.com/docs/en/hooks) expose task, tool, compaction, and completion lifecycle events with model-visible additional context.
+- [Claude Code hooks](https://code.claude.com/docs/en/hooks) expose Claude's native task, tool, compaction, and completion lifecycle events with model-visible additional context.
 - [MCP server primitives](https://modelcontextprotocol.io/specification/2026-07-28/server/index) distinguish model-controlled tools from application-controlled resources, which is why MCP alone is not the deterministic lifecycle boundary.
 - [Cursor Memories](https://docs.cursor.com/en/context/memories) already extract project-scoped rules from conversations, illustrating why generic “memory” is not sufficient differentiation.
 - [Git worktree documentation](https://git-scm.com/docs/git-worktree) confirms that linked worktrees share much repository state while keeping `HEAD` and other state per worktree.

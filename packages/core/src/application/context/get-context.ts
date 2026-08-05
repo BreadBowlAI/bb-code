@@ -3,7 +3,7 @@ import type { SemanticRetrievalProvider } from "../../ports/semantic-retrieval.j
 import { openWorkspace } from "../workspace/open-workspace.js";
 import { retrieveContext } from "./retrieve-context.js";
 
-export async function getContext(input: { cwd: string; task: string; paths?: string[]; maxItems?: number; runId?: string; databasePath?: string; semantic?: SemanticRetrievalProvider }): Promise<ContextResult> {
+export async function getContext(input: { cwd: string; request: string; paths?: string[]; maxItems?: number; runId?: string; databasePath?: string; semantic?: SemanticRetrievalProvider }): Promise<ContextResult> {
   const workspace = await openWorkspace(input.cwd, input.databasePath ? { databasePath: input.databasePath } : {});
   try {
     return await retrieveContext({
@@ -11,7 +11,7 @@ export async function getContext(input: { cwd: string; task: string; paths?: str
       repositoryId: workspace.repositoryId,
       gitViewId: workspace.gitViewId,
       git: workspace.git,
-      query: input.task,
+      query: input.request,
       ...(input.paths ? { paths: input.paths } : {}),
       ...(input.maxItems ? { maxItems: input.maxItems } : {}),
       ...(input.runId ? { runId: input.runId } : {}),

@@ -2,7 +2,7 @@
 
 Status: normative implementation source of truth  
 Version: 0.1  
-Updated: 2026-08-03
+Updated: 2026-08-05
 
 The product rationale and longer-term architecture live in
 [`BB_CODE_MVP.md`](BB_CODE_MVP.md). Implementers should use this document for
@@ -29,8 +29,8 @@ The MVP includes:
 It excludes OpenCode, team synchronization, a web dashboard, a master-agent
 interface, autonomous acceptance, and hard enforcement.
 
-The MVP succeeds when a commitment accepted during a Codex task is
-automatically supplied during a later relevant Claude Code task, and the
+The MVP succeeds when a commitment accepted during a Codex run is
+automatically supplied during a later relevant Claude Code request, and the
 developer can identify a consequential mistake or repeated explanation it
 prevented.
 
@@ -91,7 +91,7 @@ bb add intent
 bb add belief
 bb add commitment
 bb status
-bb context "<task>" [--path <path>] [--json]
+bb context "<request>" [--path <path>] [--json]
 bb explain <statement-id> [--json]
 bb review [candidate-id]
 bb review --accept|--reject|--defer <candidate-id>
@@ -115,7 +115,7 @@ Expose exactly four tools:
 
 ```ts
 bb_context({
-  task: string,
+  request: string,
   paths?: string[],
   maxItems?: number
 })
@@ -139,7 +139,7 @@ bb_finish_run({
 })
 ```
 
-`bb_finish_run` is the reliable end-of-task learning boundary. The active
+`bb_finish_run` is the reliable end-of-run learning boundary. The active
 coding agent submits structured learning using its existing reasoning; bb-code
 does not call a second extraction model.
 
@@ -247,10 +247,10 @@ type RuntimeEvent = {
   host: "codex" | "claude"
   event:
     | "session_start"
-    | "start_task"
+    | "start_run"
     | "before_tool"
     | "after_tool"
-    | "finish_task"
+    | "finish_run"
     | "session_end"
   externalSessionId: string
   externalTurnId?: string
@@ -453,14 +453,14 @@ AGENTS.md, CLAUDE.md, ADRs, and architecture documents. Extracted statements
 enter the candidate queue; repository documents never become authority
 automatically.
 
-### Task start and retrieval
+### Run start and retrieval
 
 On `UserPromptSubmit`:
 
-1. Translate native input to `start_task`.
+1. Translate native input to `start_run`.
 2. Reconcile repository, worktree, and Git state.
 3. Create or resume the agent session.
-4. Create one run for the new task.
+4. Create one run for the new request.
 5. Filter applicable current statements.
 6. Run local FTS5 retrieval.
 7. If QKV is enabled, run semantic retrieval with a 1.2-second deadline.
@@ -476,7 +476,7 @@ Applicability:
   current `HEAD`;
 - changed supporting blobs keep a belief visible but stale;
 - dirty beliefs apply only to the exact worktree/fingerprint;
-- divergent-branch beliefs are excluded unless the task concerns that branch
+- divergent-branch beliefs are excluded unless the request concerns that branch
   or a merge;
 - contradicted, superseded, abandoned, satisfied, and retired statements are
   excluded from normal retrieval.
@@ -559,7 +559,7 @@ back to FTS5 and are logged.
 
 ### Git lifecycle
 
-At every task boundary resolve commit, tree, branch label, and dirty
+At every run boundary resolve commit, tree, branch label, and dirty
 fingerprint. Branch labels are display metadata only. Never depend on Git hooks.
 
 Dirty evidence remains preserved when committed. Compare base-to-dirty and
@@ -580,10 +580,10 @@ Map these host events:
 
 ```text
 SessionStart      -> session_start
-UserPromptSubmit  -> start_task
+UserPromptSubmit  -> start_run
 PreToolUse        -> before_tool
 PostToolUse       -> after_tool
-Stop              -> finish_task
+Stop              -> finish_run
 SessionEnd        -> session_end
 ```
 
@@ -630,7 +630,7 @@ Automated coverage must include:
 Release acceptance scenarios:
 
 1. Initialize and create an accepted commitment without QKV.
-2. Verify automatic Codex task-start injection.
+2. Verify automatic Codex run-start injection.
 3. Complete through `bb_finish_run` and confirm proposals remain pending.
 4. Accept a belief through `bb review`.
 5. Verify that Claude Code retrieves the accepted belief.
@@ -645,7 +645,7 @@ Release acceptance scenarios:
 
 Performance targets:
 
-- local task-start retrieval p95 below 200 ms for 10,000 statements;
+- local run-start retrieval p95 below 200 ms for 10,000 statements;
 - pre-tool hook p95 below 50 ms;
 - QKV deadline at 1.2 seconds with local fallback;
 - no hook failure prevents the coding agent from continuing;

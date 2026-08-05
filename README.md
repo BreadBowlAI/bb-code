@@ -12,7 +12,7 @@ Statements are immutable revisions backed by evidence. Agent-authored changes en
 
 ## Why this layer
 
-Coding agents are already good at editing code. What disappears between tasks is the reasoning that should constrain the next task: why an API must stay compatible, which assumption is uncertain, or what success means. bb-code sits beside the coding agent as a standalone local runtime:
+Coding agents are already good at editing code. What disappears between requests and sessions is the reasoning that should constrain the next run: why an API must stay compatible, which assumption is uncertain, or what success means. bb-code sits beside the coding agent as a standalone local runtime:
 
 ```text
 Codex / Claude Code
@@ -21,7 +21,7 @@ Codex / Claude Code
                                                           └─> optional QKV
 ```
 
-Hooks provide reliable task timing. MCP gives the agent four explicit operations. The core imports no host-specific or QKV code, so OpenCode and other adapters can be added without changing the domain.
+Hooks provide reliable run timing. MCP gives the agent four explicit operations. The core imports no host-specific or QKV code, so OpenCode and other adapters can be added without changing the domain.
 
 ## Quick start
 
@@ -44,7 +44,7 @@ Install `plugins/bb-code` through the included Codex marketplace, or add `.claud
 
 ## The four agent tools
 
-- `bb_context` retrieves applicable context for a task and returns the active run ID when hooks started the run.
+- `bb_context` retrieves applicable context for a request and returns the active run ID when hooks started the run.
 - `bb_explain` returns one statement's typed current revision.
 - `bb_propose_update` queues one proposed learning for human review.
 - `bb_finish_run` records the outcome, verification, context effects, and zero or more proposals.
@@ -59,7 +59,7 @@ bb integrate codex|claude
 bb doctor
 bb add intent|belief|commitment
 bb status
-bb context "<task>" [--path <path>] [--json]
+bb context "<request>" [--path <path>] [--json]
 bb explain <statement-id> [--json]
 bb review [candidate-id] [--accept|--edit|--reject|--defer|--explain]
 bb qkv enable|disable|status

@@ -28,7 +28,7 @@ describe("cross-agent MVP release flow", () => {
       const codex = await processRuntimeEvent({
         schemaVersion: 1,
         host: "codex",
-        event: "start_task",
+        event: "start_run",
         externalSessionId: "codex-release",
         externalTurnId: "turn-1",
         cwd: fixture.root,
@@ -79,7 +79,7 @@ describe("cross-agent MVP release flow", () => {
       const claude = await processRuntimeEvent({
         schemaVersion: 1,
         host: "claude",
-        event: "start_task",
+        event: "start_run",
         externalSessionId: "claude-release",
         externalTurnId: "turn-2",
         cwd: fixture.root,

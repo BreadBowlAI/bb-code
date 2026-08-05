@@ -32,9 +32,9 @@ export function registerKnowledgeCommands(program: Command): void {
     }
   });
 
-  program.command("context <task>").description("Retrieve relevant project context").option("--path <path...>").option("--max-items <count>").option("--json").action(async (task, options) => {
+  program.command("context <request>").description("Retrieve relevant project context").option("--path <path...>").option("--max-items <count>").option("--json").action(async (request, options) => {
     const semantic = await configuredSemantic(process.cwd());
-    const context = await getContext({ cwd: process.cwd(), task, ...(options.path ? { paths: options.path } : {}), ...(options.maxItems ? { maxItems: Number(options.maxItems) } : {}), ...(semantic ? { semantic } : {}) });
+    const context = await getContext({ cwd: process.cwd(), request, ...(options.path ? { paths: options.path } : {}), ...(options.maxItems ? { maxItems: Number(options.maxItems) } : {}), ...(semantic ? { semantic } : {}) });
     print(options.json ? context : context.rendered, Boolean(options.json));
   });
 

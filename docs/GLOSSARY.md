@@ -57,27 +57,40 @@ A correlation record for one host's session in one repository worktree. It
 connects Codex or Claude Code's external session ID to bb-code's stable local
 identity. It can contain multiple runs.
 
+### Request
+
+One user-submitted prompt asking the coding agent to explain, investigate, or
+act. A request is input to a run; it is not a persisted project-management
+entity.
+
 ### Run
 
-One task or turn of agent work: prompt received, context retrieved, tools
-observed, outcome recorded, and candidate updates proposed. A run belongs to an
-agent session and has start and end Git views.
+One prompt-to-stop execution: a request is received, context is retrieved,
+tools are observed, an outcome is recorded, and candidate updates may be
+proposed. A run belongs to an agent session and has start and end Git views.
+
+### Change
+
+A possible future outcome-level concept that may group zero or more runs around
+one desired project transition. Change is reserved terminology and is not a
+persisted MVP entity. Do not use `task` as a bb-code domain synonym for a run or
+a future Change; hosts may still use that word in their native interfaces.
 
 ### Run event
 
-A normalized lifecycle observation such as task start, before tool, after tool,
-finish task, or session end. Host-specific JSON is translated at the adapter
+A normalized lifecycle observation such as run start, before tool, after tool,
+finish run, or session end. Host-specific JSON is translated at the adapter
 boundary before a run event reaches the core.
 
 ### Verification
 
-Structured evidence about whether the task outcome was checked, such as a test,
+Structured evidence about whether the run outcome was checked, such as a test,
 build, lint run, or manual verification and its result.
 
 ### Context effect
 
 The coding agent's structured report of how one retrieved statement affected
-the task. The MVP values are `changed_plan`, `caused_clarification`,
+the run. The MVP values are `changed_plan`, `caused_clarification`,
 `avoided_violation`, `changed_verification`, and `no_effect`.
 
 The coding agent generates this report because only it has direct access to its
@@ -99,7 +112,7 @@ normalized runtime protocol.
 ### Hook
 
 A host-controlled lifecycle callback. bb-code uses hooks for reliable timing:
-task start, before and after tools, completion, compaction recovery, and session
+run start, before and after tools, completion, compaction recovery, and session
 end where supported.
 
 ### MCP server
@@ -110,7 +123,7 @@ agent operations, while hooks decide when integration code runs.
 
 ### `bb_context`
 
-Retrieves the small set of currently applicable statements for a task and
+Retrieves the small set of currently applicable statements for a request and
 optional paths.
 
 ### `bb_explain`
@@ -125,7 +138,7 @@ durable.
 
 ### `bb_finish_run`
 
-The structured end-of-task boundary. It records outcome, summary, verification,
+The structured end-of-run boundary. It records outcome, summary, verification,
 context effects, and zero or more pending proposals.
 
 ## Git

@@ -1,7 +1,7 @@
 # Product decisions
 
 Status: accepted direction for the MVP  
-Updated: 2026-08-04
+Updated: 2026-08-05
 
 This document is the compact decision record for bb-code. The rationale and
 alternatives are developed fully in [`BB_CODE_MVP.md`](BB_CODE_MVP.md).
@@ -10,7 +10,7 @@ alternatives are developed fully in [`BB_CODE_MVP.md`](BB_CODE_MVP.md).
 
 bb-code is the continuity layer for software engineering agents. Its promise is
 that agents stop starting from zero: the relevant intent, beliefs, and accepted
-commitments survive across tasks and across coding tools.
+commitments survive across requests, sessions, and coding tools.
 
 bb-code does not compete first on chat, code editing, terminal execution, model
 routing, or orchestration. Codex, Claude Code, OpenCode, and future hosts keep
@@ -28,8 +28,8 @@ The durable concepts are:
 - **Evidence** — an observation that supports, contradicts, or explains a
   statement.
 
-An agent can be described informally as an **intern**: it receives a scoped
-task, gathers evidence, and proposes what the project may have learned. Like an
+An agent can be described informally as an **intern**: it receives scoped work,
+gathers evidence, and proposes what the project may have learned. Like an
 intern, it does not acquire authority merely by doing the work. In the code and
 database, the precise terms remain `agent_session` and `run`.
 
@@ -48,7 +48,7 @@ Codex / Claude Code / future host
 
 The two integration mechanisms have separate jobs:
 
-- Hooks provide deterministic timing at task start, tool boundaries, task
+- Hooks provide deterministic timing at run start, tool boundaries, run
   completion, and session end.
 - MCP gives the active model explicit depth: retrieve context, explain a
   statement, propose an update, and finish a run.
@@ -128,7 +128,7 @@ and secrets never belong in the QKV request path.
 ## MVP proof
 
 The MVP is proven when a reviewed statement created during work in one coding
-agent is automatically retrieved during a later relevant task in another agent,
+agent is automatically retrieved during a later relevant request in another agent,
 and the developer can identify a repeated explanation or consequential mistake
 that the context prevented.
 

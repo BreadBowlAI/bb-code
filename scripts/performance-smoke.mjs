@@ -34,7 +34,7 @@ try {
   const retrieval = [];
   for (let index = 0; index < 30; index += 1) {
     const started = performance.now();
-    await processRuntimeEvent({ schemaVersion: 1, host: "codex", event: "start_task", externalSessionId: "performance", externalTurnId: `turn-${index}`, cwd: root, occurredAt: new Date().toISOString(), payload: { prompt: `Change subsystem ${index % 100} behavior` } }, databasePath);
+    await processRuntimeEvent({ schemaVersion: 1, host: "codex", event: "start_run", externalSessionId: "performance", externalTurnId: `turn-${index}`, cwd: root, occurredAt: new Date().toISOString(), payload: { prompt: `Change subsystem ${index % 100} behavior` } }, databasePath);
     retrieval.push(performance.now() - started);
   }
   const hooks = [];
@@ -46,7 +46,7 @@ try {
   const retrievalP95 = percentile95(retrieval);
   const hookP95 = percentile95(hooks);
   process.stdout.write(`10k retrieval p95=${retrievalP95.toFixed(1)}ms; pre-tool p95=${hookP95.toFixed(1)}ms\n`);
-  if (retrievalP95 >= 200) throw new Error(`Local task-start retrieval p95 exceeded 200ms (${retrievalP95.toFixed(1)}ms)`);
+  if (retrievalP95 >= 200) throw new Error(`Local run-start retrieval p95 exceeded 200ms (${retrievalP95.toFixed(1)}ms)`);
   if (hookP95 >= 50) throw new Error(`Pre-tool hook p95 exceeded 50ms (${hookP95.toFixed(1)}ms)`);
 } finally {
   rmSync(directory, { recursive: true, force: true });

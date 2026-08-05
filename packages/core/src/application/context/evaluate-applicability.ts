@@ -15,7 +15,7 @@ function scopeApplies(statement: CurrentStatement, paths: string[]): StatementAp
   if (statement.status !== "active" && statement.status !== "accepted") return { applies: false, freshness: "unknown", reason: `status:${statement.status}` };
   if (statement.scope.kind === "repository") return undefined;
   const prefix = statement.scope.prefix;
-  if (paths.length === 0) return { applies: true, freshness: "unknown", reason: `path:${prefix} (task path unknown)` };
+  if (paths.length === 0) return { applies: true, freshness: "unknown", reason: `path:${prefix} (request path unknown)` };
   const matched = paths.some((path) => path === prefix || path.startsWith(`${prefix}/`) || prefix.startsWith(`${path}/`));
   return matched ? undefined : { applies: false, freshness: "unknown", reason: `outside:${prefix}` };
 }

@@ -14,11 +14,11 @@ export function createMcpServer(): McpServer {
   const server = new McpServer({ name: "bb-code", version: "0.1.0" });
   server.registerTool(MCP_TOOL_NAMES[0], {
     title: "Retrieve bb-code context",
-    description: "Retrieve applicable project intents, beliefs, and commitments for a coding task.",
-    inputSchema: { task: z.string().min(1), paths: z.array(z.string()).optional(), maxItems: z.number().int().min(1).max(12).optional() }
-  }, async ({ task, paths, maxItems }) => {
+    description: "Retrieve applicable project intents, beliefs, and commitments for a coding request.",
+    inputSchema: { request: z.string().min(1), paths: z.array(z.string()).optional(), maxItems: z.number().int().min(1).max(12).optional() }
+  }, async ({ request, paths, maxItems }) => {
     const semantic = await configuredSemantic(process.cwd());
-    return result((await getContext({ cwd: process.cwd(), task, ...(paths ? { paths } : {}), ...(maxItems ? { maxItems } : {}), ...(semantic ? { semantic } : {}) })).rendered);
+    return result((await getContext({ cwd: process.cwd(), request, ...(paths ? { paths } : {}), ...(maxItems ? { maxItems } : {}), ...(semantic ? { semantic } : {}) })).rendered);
   });
   server.registerTool(MCP_TOOL_NAMES[1], {
     title: "Explain a statement",
@@ -36,7 +36,7 @@ export function createMcpServer(): McpServer {
   }, async ({ runId, proposal }) => result({ candidateId: await proposeUpdate(process.cwd(), runId, proposal) }));
   server.registerTool(MCP_TOOL_NAMES[3], {
     title: "Finish a bb-code run",
-    description: "Record the task outcome, verification, context effects, and pending proposals at the learning boundary.",
+    description: "Record the run outcome, verification, context effects, and pending proposals at the learning boundary.",
     inputSchema: { runId: z.string().min(1), outcome: z.enum(["completed", "partial", "blocked", "failed"]), summary: z.string().min(1), verification: z.array(VerificationSchema).default([]), contextEffects: z.array(ContextEffectSchema).default([]), proposals: z.array(CandidateProposalSchema).default([]) }
   }, async (input) => result(await finishRun(process.cwd(), input)));
   return server;

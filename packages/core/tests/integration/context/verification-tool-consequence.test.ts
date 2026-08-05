@@ -14,7 +14,7 @@ describe("verification tool consequences", () => {
       await processRuntimeEvent({
         schemaVersion: 1,
         host: "claude",
-        event: "start_task",
+        event: "start_run",
         externalSessionId: "verification-session",
         cwd: fixture.root,
         occurredAt: "2026-01-01T00:00:00.000Z",
@@ -33,7 +33,7 @@ describe("verification tool consequences", () => {
       const stop = await processRuntimeEvent({
         schemaVersion: 1,
         host: "claude",
-        event: "finish_task",
+        event: "finish_run",
         externalSessionId: "verification-session",
         cwd: fixture.root,
         occurredAt: "2026-01-01T00:02:00.000Z",

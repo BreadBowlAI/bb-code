@@ -100,7 +100,7 @@ export function registerSetupCommands(program: Command): void {
     const workspace = await openWorkspace(process.cwd());
     if (host === "codex") {
       const marketplace = await registerCodexMarketplace(workspace.root);
-      print(`Registered the Codex marketplace at ${marketplace}. Open Codex /plugins, install and trust bb-code, then start a new task and run \`bb doctor\`.`);
+      print(`Registered the Codex marketplace at ${marketplace}. Open Codex /plugins, install and trust bb-code, then start a new Codex task and run \`bb doctor\`.`);
       return;
     }
     const marketplace = await claudeMarketplaceSource();

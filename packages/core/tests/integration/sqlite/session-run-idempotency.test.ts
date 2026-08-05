@@ -10,7 +10,7 @@ describe("session and run idempotency", () => {
       const secondSession = fixture.database.startSession(input);
       expect(secondSession).toBe(firstSession);
 
-      const runInput = { sessionId: firstSession, externalTurnId: "same-turn", prompt: "Same task", gitViewId: fixture.gitViewId };
+      const runInput = { sessionId: firstSession, externalTurnId: "same-turn", prompt: "Same request", gitViewId: fixture.gitViewId };
       const firstRun = fixture.database.startRun(runInput);
       const secondRun = fixture.database.startRun(runInput);
       expect(secondRun).toBe(firstRun);

@@ -4,7 +4,7 @@ import { openWorkspace } from "@breadbowl/bb-core";
 import { configuredQkvClient } from "../composition/qkv-config.js";
 import { print } from "./io.js";
 
-const DISCLOSURE = "QKV will process reviewed current statements and a bounded secret-filtered term/path projection of active task queries. Source code, diffs, stored/raw prompts, tool input/output, transcripts, environment values, and secrets are never indexed.";
+const DISCLOSURE = "QKV will process reviewed current statements and a bounded secret-filtered term/path projection of active request queries. Source code, diffs, stored/raw prompts, tool input/output, transcripts, environment values, and secrets are never indexed.";
 
 async function confirmDisclosure(yes: boolean): Promise<void> {
   print(DISCLOSURE);

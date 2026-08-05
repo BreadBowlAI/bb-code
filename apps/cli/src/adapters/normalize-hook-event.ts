@@ -4,12 +4,12 @@ export type Host = "codex" | "claude";
 
 const EVENT_NAMES: Record<string, RuntimeEvent["event"]> = {
   SessionStart: "session_start",
-  UserPromptSubmit: "start_task",
+  UserPromptSubmit: "start_run",
   PreToolUse: "before_tool",
   PostToolUse: "after_tool",
   PostToolUseFailure: "after_tool",
   PostToolUseBatch: "after_tool",
-  Stop: "finish_task",
+  Stop: "finish_run",
   SessionEnd: "session_end"
 };
 

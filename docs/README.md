@@ -10,10 +10,12 @@ folder structure.
    product and architecture decisions.
 2. [`BB_CODE_MVP.md`](BB_CODE_MVP.md) — the complete product thesis, software
    engineering flow, integration analysis, Git model, launch strategy, and
-   long-term ambition. This is preserved verbatim from the design repository.
+   long-term ambition. Its content is preserved in full from the design
+   repository, with terminology normalized to the current glossary.
 3. [`BB_CODE_IMPLEMENTATION_PLAN.md`](BB_CODE_IMPLEMENTATION_PLAN.md) — the
    complete original MVP specification, including interfaces, tables,
-   processes, and acceptance criteria. This is also preserved verbatim.
+   processes, and acceptance criteria. Its content is likewise preserved in
+   full with current terminology.
 4. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — the concise contract for
    the current `0.1.0` codebase.
 5. [`ARCHITECTURE.md`](ARCHITECTURE.md) and
@@ -62,6 +64,9 @@ or credentials.
 
 ## Terminology policy
 
-Use direct concepts: intents, beliefs, commitments, evidence, candidates,
-sessions, runs, and context effects. Do not reintroduce the discarded “Project
-Mind”, “Compass”, or “Map” vocabulary.
+Use direct concepts: requests, intents, beliefs, commitments, evidence,
+candidates, sessions, runs, and context effects. `Change` is reserved for a
+possible post-MVP outcome-level concept. Do not use `task` as a bb-code domain
+synonym for a request, run, or Change, and do not reintroduce the discarded
+“Project Mind”, “Compass”, or “Map” vocabulary. Host documentation and UI may
+still use their native `task` label at the adapter boundary.

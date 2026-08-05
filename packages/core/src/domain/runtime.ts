@@ -30,7 +30,7 @@ export type FinishRunInput = z.infer<typeof FinishRunInputSchema>;
 export const RuntimeEventSchema = z.object({
   schemaVersion: z.literal(1),
   host: z.enum(["codex", "claude"]),
-  event: z.enum(["session_start", "start_task", "before_tool", "after_tool", "finish_task", "session_end"]),
+  event: z.enum(["session_start", "start_run", "before_tool", "after_tool", "finish_run", "session_end"]),
   externalSessionId: z.string().min(1),
   externalTurnId: z.string().min(1).optional(),
   externalToolUseId: z.string().min(1).optional(),

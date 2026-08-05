@@ -56,7 +56,7 @@ function classifyTool(toolName: string | undefined, toolCategory: string | undef
 
 export async function processRuntimeEvent(raw: unknown, databasePath?: string, semantic?: SemanticRetrievalProvider): Promise<RuntimeEventResult> {
   const event: RuntimeEvent = RuntimeEventSchema.parse(raw);
-  const inspectPatchId = event.event === "start_task" || event.event === "finish_task" || event.event === "session_end";
+  const inspectPatchId = event.event === "start_run" || event.event === "finish_run" || event.event === "session_end";
   const workspace = await openWorkspace(event.cwd, { ...(databasePath ? { databasePath } : {}), inspectPatchId, lightweightGit: event.event === "before_tool" || event.event === "after_tool" });
   try {
   if (event.event === "session_start") {
@@ -68,8 +68,8 @@ export async function processRuntimeEvent(raw: unknown, databasePath?: string, s
     return {};
   }
   const sessionId = workspace.database.startSession({ repositoryId: workspace.repositoryId, worktreeId: workspace.worktreeId, host: event.host, externalSessionId: event.externalSessionId });
-  if (event.event === "start_task") {
-    const prompt = stringValue(event.payload.prompt) ?? stringValue(event.payload.user_prompt) ?? "Coding task";
+  if (event.event === "start_run") {
+    const prompt = stringValue(event.payload.prompt) ?? stringValue(event.payload.user_prompt) ?? "Coding request";
     const runId = workspace.database.startRun({ sessionId, ...(event.externalTurnId ? { externalTurnId: event.externalTurnId } : {}), prompt, gitViewId: workspace.gitViewId });
     const context = await retrieveContext({ database: workspace.database, repositoryId: workspace.repositoryId, gitViewId: workspace.gitViewId, git: workspace.git, query: prompt, paths: promptPaths(workspace.root, prompt), runId, ...(semantic ? { semantic } : {}) });
     return { runId, output: context.rendered };
@@ -114,8 +114,8 @@ export async function processRuntimeEvent(raw: unknown, databasePath?: string, s
     }
     return { runId };
   }
-  if (event.event === "finish_task" && workspace.database.handleStop(runId) === "nudge") {
-    return { runId, nudge: `Call bb_finish_run with runId ${runId} before finishing so the task outcome and proposed learnings are recorded.` };
+  if (event.event === "finish_run" && workspace.database.handleStop(runId) === "nudge") {
+    return { runId, nudge: `Call bb_finish_run with runId ${runId} before finishing so the run outcome and proposed learnings are recorded.` };
   }
   return { runId };
   } finally { workspace.database.close(); }

@@ -39,7 +39,7 @@ bb add intent
 bb add belief
 bb add commitment
 bb status
-bb context "<task>" [--path <path>] [--json]
+bb context "<request>" [--path <path>] [--json]
 bb explain <statement-id> [--json]
 bb review [candidate-id]
 bb review --accept|--edit|--reject|--defer|--explain <candidate-id>
@@ -59,7 +59,7 @@ Direct commitment creation requires explicit confirmation. Agent-facing interfac
 Expose exactly four tools:
 
 ```ts
-bb_context({ task: string, paths?: string[], maxItems?: number })
+bb_context({ request: string, paths?: string[], maxItems?: number })
 bb_explain({ statementId: string })
 bb_propose_update({ runId: string, proposal: CandidateProposal })
 bb_finish_run({
@@ -72,7 +72,7 @@ bb_finish_run({
 })
 ```
 
-`bb_finish_run` is the end-of-task learning boundary. The coding agent submits structured learning using reasoning it already performed. bb-code does not invoke a second extraction model.
+`bb_finish_run` is the end-of-run learning boundary. The coding agent submits structured learning using reasoning it already performed. bb-code does not invoke a second extraction model.
 
 ## Domain
 
@@ -104,10 +104,10 @@ type RuntimeEvent = {
   host: "codex" | "claude"
   event:
     | "session_start"
-    | "start_task"
+    | "start_run"
     | "before_tool"
     | "after_tool"
-    | "finish_task"
+    | "finish_run"
     | "session_end"
   externalSessionId: string
   externalTurnId?: string
@@ -176,9 +176,9 @@ The OS data directory holds `bb.db`. Revisions are immutable; an accepted change
 
 The bootstrap skill may inspect repository documents and propose context, but documents never confer agent authority automatically.
 
-### Task start
+### Run start
 
-1. Normalize `UserPromptSubmit` into `start_task`.
+1. Normalize `UserPromptSubmit` into `start_run`.
 2. Reconcile repository and Git state.
 3. Create or resume the session and create a run.
 4. Retrieve local FTS candidates and, when enabled, QKV candidates with a 1.2-second timeout.
@@ -186,7 +186,7 @@ The bootstrap skill may inspect repository documents and propose context, but do
 6. Abstain when neither provider finds a relevant statement and render at most 12 items, 1,200 deterministic tokens, and 4,800 characters.
 7. Log the rendered items and inject the run ID plus the requirement to call `bb_finish_run`.
 
-### Task finish
+### Run finish
 
 The agent records outcome, verification, effects, and proposals in one transaction. Context effects must reference an item logged for that run. A Stop hook nudges once only after consequential writes, verification, or failures. Candidate acceptance, including edit-and-accept, is a separate human CLI action that preserves the original proposal.
 

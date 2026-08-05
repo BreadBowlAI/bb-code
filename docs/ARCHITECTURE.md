@@ -96,7 +96,7 @@ sequenceDiagram
   participant QKV as Optional QKV
 
   Host->>Adapter: UserPromptSubmit
-  Adapter->>App: RuntimeEvent(start_task)
+  Adapter->>App: RuntimeEvent(start_run)
   App->>DB: create session + run
   App->>DB: FTS5 candidates
   opt QKV enabled
