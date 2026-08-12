@@ -14,7 +14,10 @@ export function renderContextResult(items: ContextItem[], runId?: string): { ren
     "Treat commitments as constraints, beliefs as fallible context, and intents as goals. Cite statement IDs when they affect the work.",
     ""
   ];
-  const footer = runId ? ["", `Before ending, call bb_finish_run with runId ${runId}. Proposals remain pending until a human reviews them.`] : [];
+  const footer = runId ? [
+    "",
+    `Before ending, call bb_finish_run with runId ${runId}. Evaluate whether the work created or changed a durable intent, belief, commitment, contradiction, or completed intent. Submit useful proposals for human review; after consequential work, if there are none, provide noDurableLearningReason. Proposal attributes: intent={owner:{kind,id},priority,successConditions}; belief={confidence}; commitment={rationale,authority:{kind,id},revisitCondition?}. Actor kind is human, agent, or repository_document and id is always required.`
+  ] : [];
   const selected: ContextItem[] = [];
   const conflicts: string[] = [];
   if (items.length === 0) lines.push("No relevant reviewed bb-code context was found.");

@@ -23,7 +23,8 @@ export const FinishRunInputSchema = z.object({
   summary: z.string().min(1),
   verification: z.array(VerificationSchema).default([]),
   contextEffects: z.array(ContextEffectSchema).default([]),
-  proposals: z.array(CandidateProposalSchema).default([])
+  proposals: z.array(CandidateProposalSchema).default([]),
+  noDurableLearningReason: z.string().trim().min(1).optional()
 });
 export type FinishRunInput = z.infer<typeof FinishRunInputSchema>;
 

@@ -28,6 +28,7 @@ export type FinishRunRecord = {
   verification: unknown[];
   effects: Array<{ statementId: string; effect: string; note?: string }>;
   endGitViewId?: string;
+  noDurableLearningReason?: string;
 };
 
 export class RunStore {
@@ -77,6 +78,17 @@ export class RunStore {
     return Boolean(this.connection.database.prepare("SELECT 1 FROM runs WHERE id=? AND status='running'").get(runId));
   }
 
+  hasConsequentialEvents(runId: string): boolean {
+    return Boolean(this.connection.database.prepare("SELECT 1 FROM run_events WHERE run_id=? AND consequential=1 LIMIT 1").get(runId));
+  }
+
+  hostRunCounts(repositoryId: string): Record<string, number> {
+    const rows = this.connection.database.prepare(`SELECT s.host, COUNT(*) AS count
+      FROM runs r JOIN agent_sessions s ON s.id=r.agent_session_id
+      WHERE s.repository_id=? GROUP BY s.host`).all(repositoryId) as Array<{ host: string; count: number }>;
+    return Object.fromEntries(rows.map((row) => [row.host, Number(row.count)]));
+  }
+
   startGitViewId(runId: string): string | undefined {
     const row = this.connection.database.prepare("SELECT start_git_view_id FROM runs WHERE id=?").get(runId) as { start_git_view_id: string } | undefined;
     return row?.start_git_view_id;
@@ -91,7 +103,7 @@ export class RunStore {
       const sequence = Number((database.prepare("SELECT COALESCE(MAX(sequence),0)+1 AS n FROM run_events WHERE run_id=?").get(runId) as { n: number }).n);
       const result = database.prepare(`INSERT INTO run_events(id,run_id,sequence,kind,external_event_id,tool_name,outcome,paths_json,input_summary,output_excerpt,sanitized_payload_json,occurred_at,git_view_id,consequential)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        ON CONFLICT(run_id,external_event_id) WHERE external_event_id IS NOT NULL DO NOTHING`).run(createId("evt"), runId, sequence, event.kind, event.externalEventId ?? null, event.toolName ?? null, event.outcome ?? null, toJson(event.paths ?? []), event.inputSummary ?? null, event.outputExcerpt?.slice(0, 4096) ?? null, toJson(event.payload ?? {}), event.occurredAt ?? now(), event.gitViewId ?? null, consequential ? 1 : 0);
+        ON CONFLICT(run_id,kind,external_event_id) WHERE external_event_id IS NOT NULL DO NOTHING`).run(createId("evt"), runId, sequence, event.kind, event.externalEventId ?? null, event.toolName ?? null, event.outcome ?? null, toJson(event.paths ?? []), event.inputSummary ?? null, event.outputExcerpt?.slice(0, 4096) ?? null, toJson(event.payload ?? {}), event.occurredAt ?? now(), event.gitViewId ?? null, consequential ? 1 : 0);
       inserted = Number(result.changes) === 1;
       if (!inserted) return;
       if (event.evidenceKind && event.evidenceSummary) {
@@ -115,7 +127,7 @@ export class RunStore {
         invariant(retrieval, `Statement ${effect.statementId} was not retrieved for run ${input.runId}`, "invalid_context_effect");
         return { effect, retrievalId: retrieval.retrieval_id };
       });
-      database.prepare("UPDATE runs SET status=?,summary=?,verification_json=?,finish_tool_called=1,end_git_view_id=COALESCE(?,end_git_view_id),finished_at=? WHERE id=?").run(input.outcome, input.summary, toJson(input.verification), input.endGitViewId ?? null, now(), input.runId);
+      database.prepare("UPDATE runs SET status=?,summary=?,verification_json=?,finish_tool_called=1,end_git_view_id=COALESCE(?,end_git_view_id),no_durable_learning_reason=?,finished_at=? WHERE id=?").run(input.outcome, input.summary, toJson(input.verification), input.endGitViewId ?? null, input.noDurableLearningReason ?? null, now(), input.runId);
       for (const item of effectRows) database.prepare("INSERT INTO context_effects(id,run_id,statement_id,effect,note,created_at,retrieval_id) VALUES(?,?,?,?,?,?,?)").run(`ce_${createId("evt").slice(4)}`, input.runId, item.effect.statementId, item.effect.effect, item.effect.note ?? null, now(), item.retrievalId);
     });
   }

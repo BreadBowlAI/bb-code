@@ -77,12 +77,16 @@ export function registerSetupCommands(program: Command): void {
     const workspace = await openWorkspace(process.cwd());
     print(`ok repository ${workspace.repositoryId}`);
     const health = workspace.database.health();
-    if (health.schemaVersion < 2 || health.journalMode.toLowerCase() !== "wal" || !health.foreignKeys) failures.push(`SQLite health check failed: ${JSON.stringify(health)}`);
+    if (health.schemaVersion < 3 || health.journalMode.toLowerCase() !== "wal" || !health.foreignKeys) failures.push(`SQLite health check failed: ${JSON.stringify(health)}`);
     else print(`ok SQLite schema ${health.schemaVersion}, WAL, foreign keys`);
     if (MCP_TOOL_NAMES.length !== 4 || new Set(MCP_TOOL_NAMES).size !== 4) failures.push("MCP must initialize exactly four unique tools");
     else print(`ok MCP ${MCP_TOOL_NAMES.join(", ")}`);
     if (!renderCodexResponse("UserPromptSubmit", { output: "smoke" }) || !renderClaudeResponse("UserPromptSubmit", { output: "smoke" })) failures.push("Hook response rendering failed");
-    else print("ok Codex and Claude hook responses");
+    else print("ok hook response formatter");
+    const hostRuns = workspace.database.hostRunCounts(workspace.repositoryId);
+    const hostActivity = Object.entries(hostRuns).filter(([, count]) => count > 0);
+    if (hostActivity.length) print(`ok recorded host hook activity ${hostActivity.map(([host, count]) => `${host}:${count}`).join(", ")}`);
+    else print("warn no host runs recorded; plugin files may be installed but lifecycle hooks are not yet proven. Start a new host task, submit a prompt, then rerun `bb doctor`.");
     try { await access(resolve(workspace.root, ".agents/plugins/marketplace.json")); print("ok Codex marketplace registered"); }
     catch { print("warn Codex marketplace not registered; run `bb integrate codex`"); }
     try { await access(await pluginSource("claude")); print("ok Claude plugin bundle"); }

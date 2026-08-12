@@ -1,4 +1,5 @@
 import type { ContextItem } from "../../domain/context.js";
+import { invariant } from "../../domain/errors.js";
 import type { ActorRef, CandidateProposal, CurrentStatement, StatementDraft } from "../../domain/knowledge.js";
 import type { GitView } from "../../domain/runtime.js";
 import { KnowledgeStore, type CandidateRecord, type EvidenceAnchor, type QkvIndexDocument } from "./knowledge-store.js";
@@ -40,6 +41,7 @@ export class BbDatabase {
   addRunEvent(runId: string, event: RunEventInput): boolean { return this.runs.addEvent(runId, event); }
   finishRun(input: FinishRunRecord): void { this.runs.finish(input); }
   handleStop(runId: string): "none" | "nudge" | "finalized" { return this.runs.handleStop(runId); }
+  hostRunCounts(repositoryId: string): Record<string, number> { return this.runs.hostRunCounts(repositoryId); }
   runStartGitView(runId: string): GitView | undefined {
     const id = this.runs.startGitViewId(runId);
     return id ? this.repositories.getGitView(id) : undefined;
@@ -62,9 +64,12 @@ export class BbDatabase {
   completeRun(repositoryId: string, input: FinishRunRecord & { proposals: CandidateProposal[]; proposalGitViewId?: string }): string[] {
     if (!this.runs.belongsToRepository(input.runId, repositoryId) || !this.runs.isRunning(input.runId)) throw new Error(`Running run ${input.runId} was not found in this repository`);
     const proposals = input.proposals.map((proposal) => this.knowledge.validateProposal(repositoryId, proposal));
+    const noDurableLearningReason = input.noDurableLearningReason?.trim();
+    const hasLearningDecision = proposals.length > 0 || this.knowledge.hasCandidatesForRun(input.runId) || Boolean(noDurableLearningReason);
+    invariant(!this.runs.hasConsequentialEvents(input.runId) || hasLearningDecision, `Consequential run ${input.runId} must include a proposal or noDurableLearningReason explaining why no durable project knowledge was learned`, "missing_learning_decision");
     return this.connection.transaction(() => {
       const candidateIds = proposals.map((proposal) => this.knowledge.propose(repositoryId, input.runId, proposal, input.proposalGitViewId ?? input.endGitViewId));
-      this.runs.finish(input);
+      this.runs.finish({ ...input, ...(noDurableLearningReason ? { noDurableLearningReason } : {}) });
       return candidateIds;
     });
   }

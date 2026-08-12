@@ -20,7 +20,8 @@ export async function finishRun(cwd: string, raw: unknown, databasePath?: string
       effects: input.contextEffects.map((effect) => ({ statementId: effect.statementId, effect: effect.effect, ...(effect.note ? { note: effect.note } : {}) })),
       endGitViewId: workspace.gitViewId,
       proposalGitViewId: workspace.gitViewId,
-      proposals: input.proposals
+      proposals: input.proposals,
+      ...(input.noDurableLearningReason ? { noDurableLearningReason: input.noDurableLearningReason } : {})
     });
     return { candidateIds };
   } finally { workspace.database.close(); }

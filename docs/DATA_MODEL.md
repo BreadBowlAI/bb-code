@@ -14,4 +14,6 @@ Every statement has a kind-specific status and attributes. “Proposed” is nev
 
 Migration v2 is additive: Git views gain parents, stable patch IDs, and changed paths; run events gain Git linkage, external-event deduplication, and consequential classification; candidates preserve a separate accepted edit and link evidence; context effects link to the retrieval that actually supplied the statement. Repository-scoped indexes keep search and job hydration isolated.
 
+Migration v3 makes external tool-event identity phase-aware: one `before_tool` and one `after_tool` row may share a host tool-use ID, while duplicate delivery of either phase is still idempotent. Runs also store an optional `no_durable_learning_reason`, making the agent's explicit decision auditable when consequential work produces no proposals.
+
 SQLite uses WAL, foreign keys, normal synchronous mode, and a five-second busy timeout. IDs are ULIDs with readable prefixes such as `repo_`, `run_`, `bel_`, and `com_`.

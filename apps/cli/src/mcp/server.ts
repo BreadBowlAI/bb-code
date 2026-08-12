@@ -10,6 +10,12 @@ function result(value: unknown) {
 
 export const MCP_TOOL_NAMES = ["bb_context", "bb_explain", "bb_propose_update", "bb_finish_run"] as const;
 
+const PROPOSAL_GUIDANCE = `Choose the proposal kind before constructing attributes. Exact create shapes:
+- intent: attributes { owner: { kind: "human"|"agent"|"repository_document", id: string, label?: string }, priority: "low"|"normal"|"high", successConditions: string[] }
+- belief: attributes { confidence: number from 0 to 1 }
+- commitment: attributes { rationale: string, authority: { kind: "human"|"agent"|"repository_document", id: string, label?: string }, revisitCondition?: string }
+For a direct user statement, use an explicit human actor such as { kind: "human", id: "repository-owner" }; never invent human authority for an agent-derived decision. Use repository_document with the supporting path for explicit repository authority. For non-create operations, provide targetStatementId and call bb_explain first if the current kind or attributes are uncertain.`;
+
 export function createMcpServer(): McpServer {
   const server = new McpServer({ name: "bb-code", version: "0.1.0" });
   server.registerTool(MCP_TOOL_NAMES[0], {
@@ -31,13 +37,13 @@ export function createMcpServer(): McpServer {
   });
   server.registerTool(MCP_TOOL_NAMES[2], {
     title: "Propose a durable update",
-    description: "Put a statement update into the human review queue. This never changes durable context directly.",
+    description: `Put a statement update into the human review queue. This never changes durable context directly. ${PROPOSAL_GUIDANCE}`,
     inputSchema: { runId: z.string().min(1), proposal: CandidateProposalSchema }
   }, async ({ runId, proposal }) => result({ candidateId: await proposeUpdate(process.cwd(), runId, proposal) }));
   server.registerTool(MCP_TOOL_NAMES[3], {
     title: "Finish a bb-code run",
-    description: "Record the run outcome, verification, context effects, and pending proposals at the learning boundary.",
-    inputSchema: { runId: z.string().min(1), outcome: z.enum(["completed", "partial", "blocked", "failed"]), summary: z.string().min(1), verification: z.array(VerificationSchema).default([]), contextEffects: z.array(ContextEffectSchema).default([]), proposals: z.array(CandidateProposalSchema).default([]) }
+    description: `Record the run outcome, verification, context effects, and pending proposals at the learning boundary. A consequential run with no proposals must explain why it produced no durable learning. ${PROPOSAL_GUIDANCE}`,
+    inputSchema: { runId: z.string().min(1), outcome: z.enum(["completed", "partial", "blocked", "failed"]), summary: z.string().min(1), verification: z.array(VerificationSchema).default([]), contextEffects: z.array(ContextEffectSchema).default([]), proposals: z.array(CandidateProposalSchema).default([]), noDurableLearningReason: z.string().trim().min(1).optional() }
   }, async (input) => result(await finishRun(process.cwd(), input)));
   return server;
 }

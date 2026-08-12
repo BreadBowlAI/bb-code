@@ -51,8 +51,18 @@ const VERSION_2 = `
   INSERT INTO schema_migrations(version, applied_at) VALUES(2, datetime('now'));
 `;
 
+const VERSION_3 = `
+  DROP INDEX run_events_external_event;
+  CREATE UNIQUE INDEX run_events_external_event
+    ON run_events(run_id, kind, external_event_id)
+    WHERE external_event_id IS NOT NULL;
+  ALTER TABLE runs ADD COLUMN no_durable_learning_reason TEXT;
+  INSERT INTO schema_migrations(version, applied_at) VALUES(3, datetime('now'));
+`;
+
 const MIGRATIONS = [
-  { version: 2, sql: VERSION_2 }
+  { version: 2, sql: VERSION_2 },
+  { version: 3, sql: VERSION_3 }
 ] as const;
 
 export function migrate(database: DatabaseSync): void {

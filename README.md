@@ -47,9 +47,11 @@ Install `plugins/bb-code` through the included Codex marketplace, or add `.claud
 - `bb_context` retrieves applicable context for a request and returns the active run ID when hooks started the run.
 - `bb_explain` returns one statement's typed current revision.
 - `bb_propose_update` queues one proposed learning for human review.
-- `bb_finish_run` records the outcome, verification, context effects, and zero or more proposals.
+- `bb_finish_run` records the outcome, verification, context effects, and proposals. After consequential work with no proposals anywhere in the run, it requires an explicit `noDurableLearningReason` instead of silently treating an empty list as a learning decision.
 
 There is intentionally no `accept` MCP tool.
+
+`bb doctor` distinguishes static plugin/configuration checks from evidence that host lifecycle hooks have actually recorded a run in the current repository.
 
 ## CLI
 

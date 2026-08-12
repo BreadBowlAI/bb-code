@@ -135,13 +135,16 @@ bb_finish_run({
   summary: string,
   verification: Verification[],
   contextEffects: ContextEffect[],
-  proposals: CandidateProposal[]
+  proposals: CandidateProposal[],
+  noDurableLearningReason?: string
 })
 ```
 
 `bb_finish_run` is the reliable end-of-run learning boundary. The active
 coding agent submits structured learning using its existing reasoning; bb-code
-does not call a second extraction model.
+does not call a second extraction model. Consequential runs must submit at
+least one proposal during the run or explicitly explain why no durable
+learning was produced.
 
 ```ts
 type Verification = {
@@ -325,6 +328,7 @@ runs
   id PK, agent_session_id FK, external_turn_id nullable, prompt,
   status, start_git_view_id FK, end_git_view_id nullable, summary nullable,
   verification_json, finish_tool_called, stop_nudge_count,
+  no_durable_learning_reason nullable,
   started_at, finished_at nullable
 
 run_events
@@ -332,6 +336,10 @@ run_events
   tool_name nullable, outcome nullable, paths_json, input_summary nullable,
   output_excerpt nullable, sanitized_payload_json, occurred_at
 ```
+
+Host tool events are idempotent by run, phase, and external tool-use ID. This
+preserves one before/after pair while suppressing duplicate delivery of the
+same phase.
 
 Run status is `running | completed | partial | blocked | failed | abandoned`.
 

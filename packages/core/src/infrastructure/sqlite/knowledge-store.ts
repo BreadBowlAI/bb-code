@@ -213,6 +213,10 @@ export class KnowledgeStore {
     });
   }
 
+  hasCandidatesForRun(runId: string): boolean {
+    return Boolean(this.connection.database.prepare("SELECT 1 FROM candidate_updates WHERE run_id=? LIMIT 1").get(runId));
+  }
+
   resolveCandidate(id: string, decision: "accept" | "reject" | "defer", actor: ActorRef, note?: string, editedProposal?: CandidateProposal): CurrentStatement | undefined {
     const database = this.connection.database;
     return this.connection.transaction(() => {

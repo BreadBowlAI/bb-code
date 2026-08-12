@@ -68,11 +68,12 @@ bb_finish_run({
   summary: string,
   verification: Verification[],
   contextEffects: ContextEffect[],
-  proposals: CandidateProposal[]
+  proposals: CandidateProposal[],
+  noDurableLearningReason?: string
 })
 ```
 
-`bb_finish_run` is the end-of-run learning boundary. The coding agent submits structured learning using reasoning it already performed. bb-code does not invoke a second extraction model.
+`bb_finish_run` is the end-of-run learning boundary. The coding agent submits structured learning using reasoning it already performed. A consequential run must have at least one proposal submitted during the run or provide a non-empty `noDurableLearningReason`. bb-code does not invoke a second extraction model.
 
 ## Domain
 
@@ -131,7 +132,7 @@ worktrees(repository_location_id, canonical_root, git_dir)
 git_views(repository_id, worktree_id, commit, tree, parents, patch_id, dirty_fingerprint, changed_paths, branch)
 
 agent_sessions(repository_id, worktree_id, host, external_session_id)
-runs(session, prompt, status, start_view, end_view, verification, finish_called)
+runs(session, prompt, status, start_view, end_view, verification, finish_called, no_durable_learning_reason)
 run_events(run, sequence, kind, external_event_id, git_view, consequential, tool, outcome, paths, sanitized_payload)
 
 statements(repository_id, kind, current_revision_id, created_by)
@@ -188,7 +189,7 @@ The bootstrap skill may inspect repository documents and propose context, but do
 
 ### Run finish
 
-The agent records outcome, verification, effects, and proposals in one transaction. Context effects must reference an item logged for that run. A Stop hook nudges once only after consequential writes, verification, or failures. Candidate acceptance, including edit-and-accept, is a separate human CLI action that preserves the original proposal.
+The agent records outcome, verification, effects, and its explicit learning decision in one transaction. Context effects must reference an item logged for that run. Consequential runs cannot finish with an unexplained empty proposal set; proposals previously submitted through `bb_propose_update` count toward the decision. A Stop hook nudges once only after consequential writes, verification, or failures. Candidate acceptance, including edit-and-accept, is a separate human CLI action that preserves the original proposal.
 
 ## Git behavior
 
@@ -206,11 +207,12 @@ Never send raw code, diffs, stored/raw prompts, tool input/output, secrets, envi
 - Intent, belief, and explicitly confirmed commitment creation works.
 - Local context retrieval is useful with QKV disabled.
 - Codex and Claude hooks create runs and inject context.
+- One before/after pair is retained for each host tool-use ID while duplicate delivery of either phase remains idempotent.
 - MCP exposes exactly the four named tools.
-- `bb_finish_run` queues proposals; it cannot accept them.
+- `bb_finish_run` queues proposals or records an explicit no-learning reason for consequential work; it cannot accept proposals.
 - Completion and review transitions are transactional and tested.
 - QKV is optional and degrades to local retrieval.
-- Type checking, 47 behavior tests, the release acceptance harness, build, plugin validation, packaged installation, concurrent-host WAL, and 10,000-statement performance gates pass on Node 24.
+- Type checking, behavior tests, the release acceptance harness, build, plugin validation, packaged installation, concurrent-host WAL, and 10,000-statement performance gates pass on Node 24.
 
 ## After 0.1.0
 
