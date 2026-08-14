@@ -12,6 +12,7 @@ export * from "./application/context/render-context.js";
 export * from "./application/context/retrieve-context.js";
 export * from "./application/context/evaluate-applicability.js";
 export * from "./application/context/build-query.js";
+export * from "./application/runs/durable-learning-guidance.js";
 export * from "./application/runs/run-learning.js";
 export * from "./application/runtime/process-runtime-event.js";
 export * from "./application/workspace/add-statement.js";

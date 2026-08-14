@@ -89,6 +89,8 @@ export class BbDatabase {
     }
   }
   pendingRetrievalJobs(repositoryId: string): ReturnType<SearchStore["pendingJobs"]> { return this.search.pendingJobs(repositoryId); }
+  resetFailedRetrievalJobsForRetry(repositoryId: string, provider: string): number { return this.search.resetFailedJobsForRetry(repositoryId, provider); }
+  retrievalJobSummary(repositoryId: string, provider: string): ReturnType<SearchStore["jobSummary"]> { return this.search.jobSummary(repositoryId, provider); }
   completeRetrievalJob(id: string, error?: string): void { this.search.completeJob(id, error); }
 
   health(): { schemaVersion: number; journalMode: string; foreignKeys: boolean } {

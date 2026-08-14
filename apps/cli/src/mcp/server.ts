@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { CandidateProposalSchema, ContextEffectSchema, VerificationSchema, finishRun, getContext, openWorkspace, proposeUpdate } from "@breadbowl/bb-core";
+import { CandidateProposalSchema, CONTEXT_EFFECT_GUIDANCE, ContextEffectSchema, DURABLE_LEARNING_RUBRIC, VerificationSchema, finishRun, getContext, openWorkspace, proposeUpdate } from "@breadbowl/bb-core";
 import { configuredSemantic } from "../composition/semantic-provider.js";
 
 function result(value: unknown) {
@@ -10,7 +10,8 @@ function result(value: unknown) {
 
 export const MCP_TOOL_NAMES = ["bb_context", "bb_explain", "bb_propose_update", "bb_finish_run"] as const;
 
-const PROPOSAL_GUIDANCE = `Choose the proposal kind before constructing attributes. Exact create shapes:
+export const PROPOSAL_GUIDANCE = `${DURABLE_LEARNING_RUBRIC}
+Choose the proposal kind before constructing attributes. Exact create shapes:
 - intent: attributes { owner: { kind: "human"|"agent"|"repository_document", id: string, label?: string }, priority: "low"|"normal"|"high", successConditions: string[] }
 - belief: attributes { confidence: number from 0 to 1 }
 - commitment: attributes { rationale: string, authority: { kind: "human"|"agent"|"repository_document", id: string, label?: string }, revisitCondition?: string }
@@ -42,7 +43,7 @@ export function createMcpServer(): McpServer {
   }, async ({ runId, proposal }) => result({ candidateId: await proposeUpdate(process.cwd(), runId, proposal) }));
   server.registerTool(MCP_TOOL_NAMES[3], {
     title: "Finish a bb-code run",
-    description: `Record the run outcome, verification, context effects, and pending proposals at the learning boundary. A consequential run with no proposals must explain why it produced no durable learning. ${PROPOSAL_GUIDANCE}`,
+    description: `Record the run outcome, verification, context effects, and pending proposals at the learning boundary. A consequential run with no proposals must explain why it produced no durable learning. ${CONTEXT_EFFECT_GUIDANCE} ${PROPOSAL_GUIDANCE}`,
     inputSchema: { runId: z.string().min(1), outcome: z.enum(["completed", "partial", "blocked", "failed"]), summary: z.string().min(1), verification: z.array(VerificationSchema).default([]), contextEffects: z.array(ContextEffectSchema).default([]), proposals: z.array(CandidateProposalSchema).default([]), noDurableLearningReason: z.string().trim().min(1).optional() }
   }, async (input) => result(await finishRun(process.cwd(), input)));
   return server;

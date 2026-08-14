@@ -44,8 +44,8 @@ bb explain <statement-id> [--json]
 bb review [candidate-id]
 bb review --accept|--edit|--reject|--defer|--explain <candidate-id>
 
-bb qkv enable|disable|status
-bb sync
+bb qkv configure|enable|disable|status
+bb sync [--force]
 
 bb mcp serve
 bb adapter codex <event>
@@ -73,7 +73,7 @@ bb_finish_run({
 })
 ```
 
-`bb_finish_run` is the end-of-run learning boundary. The coding agent submits structured learning using reasoning it already performed. A consequential run must have at least one proposal submitted during the run or provide a non-empty `noDurableLearningReason`. bb-code does not invoke a second extraction model.
+`bb_finish_run` is the end-of-run learning boundary. The coding agent submits structured learning using reasoning it already performed. Always-on hook context and MCP descriptions use one classification rubric: intents are active outcomes, beliefs are fallible claims about current implementation or behavior, and commitments are explicit future rules, constraints, or chosen decisions. Implementing, verifying, or approving code does not by itself turn a current fact into a commitment. Before creating a statement, agents compare retrieved context and prefer the existing statement lifecycle over duplicates. Exact same-kind duplicates are rejected deterministically. Agents report a context effect by statement ID when retrieved context changed the plan, caused clarification, avoided a violation, or changed verification. Agents propose only knowledge likely to affect future work, omitting trivial-to-rediscover facts and temporary details. A consequential run must have at least one proposal submitted during the run or provide a non-empty, specific `noDurableLearningReason`. bb-code does not invoke a second extraction model.
 
 ## Domain
 
@@ -197,7 +197,7 @@ Repository identity does not depend on a branch name. Git views contain commit/t
 
 ## QKV boundary
 
-QKV operations are create index, upsert/delete document, and search. Enablement requires an explicit disclosure, `BB_QKV_API_URL`, `BB_QKV_API_KEY`, `text_retention: "none"`, and an immutable service-selected model version. Stable documents use `bb:<statement-id>` and contain only reviewed current statement text plus minimal reviewed retrieval metadata. Semantic search uses a bounded deterministic term/path projection that removes code blocks, obvious secret assignments, authorization values, and high-entropy tokens rather than sending the stored raw prompt. Jobs coalesce per statement and retry with exponential backoff. SQLite remains the system of record and local FTS falls back after a 1.2-second semantic deadline.
+QKV operations are create index, batch-contract upsert/delete document, and search. `bb qkv configure` stores the endpoint and API key in an owner-only user file shared by CLI, hooks, and MCP; process environment values remain the highest-precedence override. Interactive `bb qkv enable` and `bb sync` offer to configure missing credentials. Non-interactive invocations never prompt and instead provide an actionable error; automation can use `bb qkv configure --from-env`. Enablement requires an explicit disclosure, `text_retention: "none"`, and an immutable service-selected model version. `bb qkv status` distinguishes persisted provider enablement, runtime credential readiness, and pending/failed/exhausted jobs without exposing the key. Stable documents use `bb:<statement-id>` and contain only reviewed current statement text plus minimal reviewed retrieval metadata. The client sends the QKV `documents` array even for one stable document and treats an HTTP 200 partial-ingestion entry as failure. Semantic search uses a bounded deterministic term/path projection that removes code blocks, obvious secret assignments, authorization values, and high-entropy tokens rather than sending the stored raw prompt. Jobs coalesce per statement and retry with exponential backoff. `bb sync --force` immediately retries every failed job for the current repository with a fresh attempt budget while interrupted pending jobs remain naturally retryable. Each invocation still attempts each eligible job at most once and exits unsuccessfully when any attempted job fails. SQLite remains the system of record and local FTS falls back after a 1.2-second semantic deadline. Retrieval ranking is relevance-first: statement kind determines how the agent treats an item, not a relevance multiplier.
 
 Never send raw code, diffs, stored/raw prompts, tool input/output, secrets, environment values, or host transcripts.
 

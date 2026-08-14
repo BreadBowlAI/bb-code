@@ -15,7 +15,7 @@
     "test:acceptance": "vitest run packages/core/tests/integration/acceptance/cross-agent-mvp-flow.test.ts packages/core/tests/integration/git/feature-belief-merge.test.ts packages/core/tests/integration/git/changed-blob-freshness.test.ts packages/core/tests/integration/context/semantic-fallback.test.ts packages/core/tests/unit/application/context-token-budget.test.ts apps/cli/tests/unit/mcp/four-tool-contract.test.ts",
     "test:performance": "node scripts/performance-smoke.mjs",
     "test:concurrency": "node scripts/concurrency-smoke.mjs",
-    "test:qkv-live": "node scripts/qkv-live-smoke.mjs",
+    "test:qkv-live": "node --env-file-if-exists=.env scripts/qkv-live-smoke.mjs",
     "smoke:package": "node scripts/package-smoke.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",
     "check:docs": "node scripts/check-docs.mjs",

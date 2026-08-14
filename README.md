@@ -64,8 +64,8 @@ bb status
 bb context "<request>" [--path <path>] [--json]
 bb explain <statement-id> [--json]
 bb review [candidate-id] [--accept|--edit|--reject|--defer|--explain]
-bb qkv enable|disable|status
-bb sync
+bb qkv configure|enable|disable|status
+bb sync [--force]
 bb mcp serve
 ```
 
@@ -75,7 +75,7 @@ bb mcp serve
 
 The runtime, adapters, plugins, schemas, local ranking, and review flow are Apache-2.0. SQLite is the source of truth. QKV is an optional semantic candidate generator behind the `SemanticRetrievalProvider` interface; local FTS5 continues working when QKV is absent or unavailable.
 
-QKV receives only reviewed current statement text, stable statement/revision IDs, kind, status, scope, reviewed rationale/success conditions, a short reviewed evidence summary, and a bounded secret-filtered retrieval-query projection. bb-code does not send source code, stored/raw prompts, tool input/output, diffs, environment values, secrets, or transcripts. Set `BB_QKV_API_URL` and `BB_QKV_API_KEY`, then run `bb qkv enable --yes` and `bb sync` to opt in. `BB_QKV_URL` remains a temporary deprecated alias.
+QKV receives only reviewed current statement text, stable statement/revision IDs, kind, status, scope, reviewed rationale/success conditions, a short reviewed evidence summary, and a bounded secret-filtered retrieval-query projection. bb-code does not send source code, stored/raw prompts, tool input/output, diffs, environment values, secrets, or transcripts. Run `bb qkv configure` to save credentials in an owner-only user configuration shared by CLI, hooks, and MCP, then run `bb qkv enable --yes` and `bb sync` to opt in. When credentials are missing, interactive `enable` and `sync` commands offer secure setup; non-interactive commands fail with instructions instead of blocking for input. Use `bb qkv configure --from-env` in automation. Environment variables remain the highest-precedence override. `bb qkv status` reports runtime readiness and queue failures without exposing the API key. Use `bb sync --force` to immediately retry all failed jobs for the current repository, including exhausted jobs; interrupted pending jobs are retried by an ordinary sync. `BB_QKV_URL` remains a temporary deprecated alias.
 
 ## Development
 

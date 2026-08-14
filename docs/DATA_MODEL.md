@@ -16,4 +16,6 @@ Migration v2 is additive: Git views gain parents, stable patch IDs, and changed 
 
 Migration v3 makes external tool-event identity phase-aware: one `before_tool` and one `after_tool` row may share a host tool-use ID, while duplicate delivery of either phase is still idempotent. Runs also store an optional `no_durable_learning_reason`, making the agent's explicit decision auditable when consequential work produces no proposals.
 
+Migration v4 removes the accidental `supports` link when the same evidence already `defines` the same revision. Candidate acceptance preserves one relationship per evidence/revision pair, while distinct run evidence remains linked separately.
+
 SQLite uses WAL, foreign keys, normal synchronous mode, and a five-second busy timeout. IDs are ULIDs with readable prefixes such as `repo_`, `run_`, `bel_`, and `com_`.

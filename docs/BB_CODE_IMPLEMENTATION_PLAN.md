@@ -528,7 +528,11 @@ The injected context instructs the agent to call `bb_finish_run` once.
 `bb_finish_run` validates the run and repository, records outcome,
 verification, and context effects, converts proposals to pending candidates,
 resolves evidence paths against run events and Git, and marks the run as
-finish-tool-complete.
+finish-tool-complete. Injected guidance tells the agent to report material
+effects by retrieved statement ID and to treat implementation facts as beliefs
+unless explicit future authority makes them commitments. Before create, the
+agent checks retrieved context and prefers revision or lifecycle transitions;
+the store rejects exact same-kind duplicates.
 
 At `Stop`:
 
@@ -550,20 +554,28 @@ QKV synchronization job. Remote failure never rolls back local acceptance.
 
 ### QKV
 
-`bb qkv enable` requires `BB_QKV_API_URL` and `BB_QKV_API_KEY`, creates one
+`bb qkv configure` stores the QKV endpoint and API key in an owner-only user
+configuration shared by CLI, hook, and MCP processes. Environment variables
+remain the highest-precedence override. `bb qkv enable` creates one
 `text_retention=none` index per repository, persists the service-selected model
 and immutable version, and enqueues current active statements. It displays an
 explicit disclosure that reviewed statements and retrieval queries will be
-processed by the service.
+processed by the service. `bb qkv status` reports provider state, runtime
+credential readiness, and queue health without exposing the API key.
 
 Index only reviewed current statements. The indexed text contains type,
 statement, rationale or success conditions, scope, and a short reviewed
 evidence summary. Use stable `doc_id = bb:<statement-id>`. Metadata contains
 statement ID, revision ID, kind, and status, but no code.
 
-`bb sync` drains retryable jobs with exponential backoff. Hooks never wait for
-indexing. Search errors, authentication failures, limits, and timeouts fall
-back to FTS5 and are logged.
+The QKV client uses the server's `documents` array contract and treats partial
+ingestion failures returned with HTTP 200 as failed jobs. `bb sync` drains
+retryable jobs with exponential backoff and returns an unsuccessful exit when
+an attempted job fails. `bb sync --force`
+clears failed-job backoff and attempt exhaustion for the current repository,
+then attempts each eligible job once; interrupted pending jobs are already
+eligible. Hooks never wait for indexing. Search errors, authentication
+failures, limits, and timeouts fall back to FTS5 and are logged.
 
 ### Git lifecycle
 

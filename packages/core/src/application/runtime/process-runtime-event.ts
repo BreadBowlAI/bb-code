@@ -3,6 +3,7 @@ import type { SemanticRetrievalProvider } from "../../ports/semantic-retrieval.j
 import { RuntimeEventSchema, type RuntimeEvent } from "../../domain/runtime.js";
 import { changedPathsSince, workingBlobSha } from "../../infrastructure/git/git-client.js";
 import { retrieveContext } from "../context/retrieve-context.js";
+import { finishRunGuidance } from "../runs/durable-learning-guidance.js";
 import { openWorkspace } from "../workspace/open-workspace.js";
 
 export type RuntimeEventResult = { output?: string; runId?: string; nudge?: string };
@@ -115,7 +116,7 @@ export async function processRuntimeEvent(raw: unknown, databasePath?: string, s
     return { runId };
   }
   if (event.event === "finish_run" && workspace.database.handleStop(runId) === "nudge") {
-    return { runId, nudge: `Call bb_finish_run with runId ${runId} before finishing so the run outcome and proposed learnings are recorded.` };
+    return { runId, nudge: finishRunGuidance(runId) };
   }
   return { runId };
   } finally { workspace.database.close(); }

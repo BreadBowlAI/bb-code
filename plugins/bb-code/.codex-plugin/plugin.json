@@ -1,6 +1,6 @@
 {
   "name": "bb-code",
-  "version": "0.1.0+codex.20260812203337",
+  "version": "0.1.0+codex.20260814191601",
   "description": "Durable project context for software engineering agents",
   "license": "Apache-2.0",
   "author": {
@@ -9,7 +9,7 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Bb Code",
-    "shortDescription": "Keep project beliefs and commitments across tasks.",
+    "shortDescription": "Keep project intents, beliefs, and commitments across tasks.",
     "longDescription": "bb-code gives Codex Git-aware project context, records task outcomes, and queues durable updates for human review.",
     "developerName": "BreadBowl",
     "category": "Productivity",
@@ -18,7 +18,7 @@
       "lifecycle hooks",
       "project bootstrap skill"
     ],
-    "defaultPrompt": "Use reviewed bb-code context while working. Before ending consequential work, explicitly submit durable learnings for human review or explain why there were none."
+    "defaultPrompt": "Use reviewed bb-code context while working and report material context effects by statement ID. Classify active outcomes as intents, current implementation facts as beliefs, and only explicit future rules or chosen constraints as commitments. Prefer revising or superseding existing statements over creating duplicates. Before ending consequential work, submit useful durable learnings for human review or explain specifically why there were none."
   },
   "mcpServers": "./.mcp.json"
 }

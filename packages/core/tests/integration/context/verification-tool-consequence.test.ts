@@ -51,6 +51,8 @@ describe("verification tool consequences", () => {
       }, databasePath);
 
       expect(stop.nudge).toContain("bb_finish_run");
+      expect(stop.nudge).toContain("fallible claim");
+      expect(stop.nudge).toContain("explicit rule, constraint, or chosen decision");
     } finally {
       fixture.dispose();
     }

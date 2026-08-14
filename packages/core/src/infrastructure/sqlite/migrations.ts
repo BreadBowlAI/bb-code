@@ -60,9 +60,23 @@ const VERSION_3 = `
   INSERT INTO schema_migrations(version, applied_at) VALUES(3, datetime('now'));
 `;
 
+const VERSION_4 = `
+  DELETE FROM revision_evidence
+  WHERE relationship = 'supports'
+    AND EXISTS (
+      SELECT 1
+      FROM revision_evidence AS defining
+      WHERE defining.revision_id = revision_evidence.revision_id
+        AND defining.evidence_id = revision_evidence.evidence_id
+        AND defining.relationship = 'defines'
+    );
+  INSERT INTO schema_migrations(version, applied_at) VALUES(4, datetime('now'));
+`;
+
 const MIGRATIONS = [
   { version: 2, sql: VERSION_2 },
-  { version: 3, sql: VERSION_3 }
+  { version: 3, sql: VERSION_3 },
+  { version: 4, sql: VERSION_4 }
 ] as const;
 
 export function migrate(database: DatabaseSync): void {

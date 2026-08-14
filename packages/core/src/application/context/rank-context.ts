@@ -9,13 +9,12 @@ type LexicalHit = { statement: CurrentStatement; rank: number };
 type RankedCandidate = { statement: CurrentStatement; score: number; lexicalRank?: number; semanticRank?: number };
 
 function multiplier(statement: CurrentStatement, paths: string[], freshness: StatementApplicability["freshness"]): number {
-  const kindWeight = statement.kind === "commitment" ? 1.35 : statement.kind === "intent" ? 1.2 : 1;
   const freshnessWeight = freshness === "stale" ? 0.6 : 1;
-  if (statement.scope.kind !== "path") return kindWeight * freshnessWeight;
+  if (statement.scope.kind !== "path") return freshnessWeight;
   const prefix = statement.scope.prefix;
-  if (paths.some((path) => path === prefix)) return kindWeight * 1.25 * freshnessWeight;
-  if (paths.some((path) => path.startsWith(`${prefix}/`) || prefix.startsWith(`${path}/`))) return kindWeight * 1.1 * freshnessWeight;
-  return kindWeight * freshnessWeight;
+  if (paths.some((path) => path === prefix)) return 1.25 * freshnessWeight;
+  if (paths.some((path) => path.startsWith(`${prefix}/`) || prefix.startsWith(`${path}/`))) return 1.1 * freshnessWeight;
+  return freshnessWeight;
 }
 
 export function rankContext(input: {

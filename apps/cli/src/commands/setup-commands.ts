@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { addStatement, openWorkspace } from "@breadbowl/bb-core";
 import { MCP_TOOL_NAMES } from "../mcp/server.js";
 import { renderClaudeResponse, renderCodexResponse } from "../adapters/hook-adapter.js";
+import { resolveQkvConfiguration } from "../composition/qkv-config.js";
 import { humanActor, print } from "./io.js";
 
 const runFile = promisify(execFile);
@@ -79,6 +80,15 @@ export function registerSetupCommands(program: Command): void {
     const health = workspace.database.health();
     if (health.schemaVersion < 3 || health.journalMode.toLowerCase() !== "wal" || !health.foreignKeys) failures.push(`SQLite health check failed: ${JSON.stringify(health)}`);
     else print(`ok SQLite schema ${health.schemaVersion}, WAL, foreign keys`);
+    const qkvState = workspace.database.getProviderState(workspace.repositoryId, "qkv");
+    if (qkvState?.status === "enabled") {
+      const qkvConfiguration = resolveQkvConfiguration();
+      if (!qkvConfiguration.apiUrl || !qkvConfiguration.apiKey) failures.push("QKV is enabled but runtime credentials are unavailable; run `bb qkv configure`");
+      else print(`ok QKV runtime credentials via ${qkvConfiguration.source}`);
+      const jobs = workspace.database.retrievalJobSummary(workspace.repositoryId, "qkv");
+      if (jobs.failed || jobs.pending) print(`warn QKV queue pending:${jobs.pending} failed:${jobs.failed} exhausted:${jobs.exhausted}; run \`bb qkv status\` then \`bb sync\``);
+      else print("ok QKV queue synchronized");
+    }
     if (MCP_TOOL_NAMES.length !== 4 || new Set(MCP_TOOL_NAMES).size !== 4) failures.push("MCP must initialize exactly four unique tools");
     else print(`ok MCP ${MCP_TOOL_NAMES.join(", ")}`);
     if (!renderCodexResponse("UserPromptSubmit", { output: "smoke" }) || !renderClaudeResponse("UserPromptSubmit", { output: "smoke" })) failures.push("Hook response rendering failed");

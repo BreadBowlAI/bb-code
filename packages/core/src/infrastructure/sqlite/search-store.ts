@@ -16,6 +16,17 @@ export type RetrievalJob = {
   last_error: string | null;
 };
 
+export type RetrievalJobSummary = {
+  pending: number;
+  failed: number;
+  completed: number;
+  ready: number;
+  waiting: number;
+  exhausted: number;
+  nextRetryAt?: string;
+  lastError?: string;
+};
+
 export class SearchStore {
   constructor(private readonly connection: SqliteConnection) {}
 
@@ -66,11 +77,33 @@ export class SearchStore {
   }
 
   setProviderState(repositoryId: string, provider: string, state: { remoteIndexId?: string; model?: string; modelVersion?: string; status: string; lastSyncedAt?: string }): void {
-    this.connection.database.prepare("INSERT INTO retrieval_provider_state VALUES(?,?,?,?,?,?,?) ON CONFLICT(repository_id,provider) DO UPDATE SET remote_index_id=excluded.remote_index_id,model=COALESCE(excluded.model,retrieval_provider_state.model),model_version=COALESCE(excluded.model_version,retrieval_provider_state.model_version),status=excluded.status,last_synced_at=excluded.last_synced_at").run(repositoryId, provider, state.remoteIndexId ?? null, state.model ?? null, state.modelVersion ?? null, state.status, state.lastSyncedAt ?? null);
+    this.connection.database.prepare("INSERT INTO retrieval_provider_state VALUES(?,?,?,?,?,?,?) ON CONFLICT(repository_id,provider) DO UPDATE SET remote_index_id=COALESCE(excluded.remote_index_id,retrieval_provider_state.remote_index_id),model=COALESCE(excluded.model,retrieval_provider_state.model),model_version=COALESCE(excluded.model_version,retrieval_provider_state.model_version),status=excluded.status,last_synced_at=COALESCE(excluded.last_synced_at,retrieval_provider_state.last_synced_at)").run(repositoryId, provider, state.remoteIndexId ?? null, state.model ?? null, state.modelVersion ?? null, state.status, state.lastSyncedAt ?? null);
   }
 
   pendingJobs(repositoryId: string): RetrievalJob[] {
     return this.connection.database.prepare("SELECT * FROM retrieval_jobs WHERE repository_id=? AND state IN ('pending','failed') AND attempts < 8 AND (next_attempt_at IS NULL OR next_attempt_at<=?) ORDER BY rowid").all(repositoryId, now()) as RetrievalJob[];
+  }
+
+  resetFailedJobsForRetry(repositoryId: string, provider: string): number {
+    const result = this.connection.database.prepare("UPDATE retrieval_jobs SET attempts=0,next_attempt_at=NULL WHERE repository_id=? AND provider=? AND state='failed'").run(repositoryId, provider);
+    return Number(result.changes);
+  }
+
+  jobSummary(repositoryId: string, provider: string): RetrievalJobSummary {
+    const rows = this.connection.database.prepare("SELECT * FROM retrieval_jobs WHERE repository_id=? AND provider=? ORDER BY rowid").all(repositoryId, provider) as RetrievalJob[];
+    const timestamp = now();
+    const retryTimes = rows.flatMap((job) => job.state === "failed" && job.attempts < 8 && job.next_attempt_at && job.next_attempt_at > timestamp ? [job.next_attempt_at] : []);
+    const lastError = [...rows].reverse().find((job) => job.last_error)?.last_error ?? undefined;
+    return {
+      pending: rows.filter((job) => job.state === "pending").length,
+      failed: rows.filter((job) => job.state === "failed").length,
+      completed: rows.filter((job) => job.state === "completed").length,
+      ready: rows.filter((job) => (job.state === "pending" || job.state === "failed") && job.attempts < 8 && (!job.next_attempt_at || job.next_attempt_at <= timestamp)).length,
+      waiting: retryTimes.length,
+      exhausted: rows.filter((job) => job.state === "failed" && job.attempts >= 8).length,
+      ...(retryTimes.length ? { nextRetryAt: retryTimes.sort()[0] } : {}),
+      ...(lastError ? { lastError } : {})
+    };
   }
 
   completeJob(id: string, error?: string): void {

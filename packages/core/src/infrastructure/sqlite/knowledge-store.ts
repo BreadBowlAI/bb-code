@@ -150,7 +150,12 @@ export class KnowledgeStore {
 
   validateProposal(repositoryId: string, raw: CandidateProposal): CandidateProposal {
     const proposal = CandidateProposalSchema.parse(raw);
-    if (proposal.operation === "create") return proposal;
+    if (proposal.operation === "create") {
+      const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, " ").trim();
+      const duplicate = this.listStatements(repositoryId).find((statement) => statement.kind === proposal.kind && normalize(statement.body) === normalize(proposal.body));
+      invariant(!duplicate, `A current ${proposal.kind} with the same statement already exists: ${duplicate?.id}. Revise, satisfy, supersede, or retire the existing statement instead.`, "duplicate_statement");
+      return proposal;
+    }
     const current = this.getStatement(proposal.targetStatementId!, repositoryId);
     this.validateOperation(proposal.operation, current.kind);
     if (proposal.operation !== "confirm") invariant(ACTIVE_STATUSES.has(current.status), `Cannot ${proposal.operation} a ${current.status} ${current.kind}`, "invalid_transition");
@@ -332,7 +337,12 @@ export class KnowledgeStore {
   private linkCandidateEvidence(candidateId: string, revisionId: string, relationship: "supports" | "contradicts"): void {
     const database = this.connection.database;
     const rows = database.prepare("SELECT evidence_id FROM candidate_evidence WHERE candidate_id=?").all(candidateId) as Array<{ evidence_id: string }>;
-    for (const row of rows) database.prepare("INSERT OR IGNORE INTO revision_evidence VALUES(?,?,?,?)").run(revisionId, row.evidence_id, relationship, now());
+    const alreadyLinked = database.prepare("SELECT 1 FROM revision_evidence WHERE revision_id=? AND evidence_id=? LIMIT 1");
+    const link = database.prepare("INSERT INTO revision_evidence VALUES(?,?,?,?)");
+    for (const row of rows) {
+      if (alreadyLinked.get(revisionId, row.evidence_id)) continue;
+      link.run(revisionId, row.evidence_id, relationship, now());
+    }
   }
 
   private validateOperation(operation: CandidateProposal["operation"], kind: StatementKind): void {
