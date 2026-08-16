@@ -54,7 +54,7 @@ authority. The persisted implementation uses the terms agent session and run.
 ### Agent session
 
 A correlation record for one host's session in one repository worktree. It
-connects Codex or Claude Code's external session ID to bb-code's stable local
+connects Codex, Claude Code, or Cursor's external session ID to bb-code's stable local
 identity. It can contain multiple runs.
 
 ### Request
@@ -101,7 +101,7 @@ retrieval alone is not proof that context was useful.
 
 ### Host
 
-The coding tool running the agent, initially Codex or Claude Code. Host-specific
+The coding tool running the agent, currently Codex, Claude Code, or Cursor. Host-specific
 types are delivery concerns and do not enter the core domain.
 
 ### Adapter
@@ -139,7 +139,22 @@ durable.
 ### `bb_finish_run`
 
 The structured end-of-run boundary. It records outcome, summary, verification,
-context effects, and zero or more pending proposals.
+context effects, a request-intent disposition, and zero or more pending
+proposals. It cannot accept a proposal.
+
+### Request-intent disposition
+
+The explicit decision made for every finished request. `durable` carries an
+intent create or lifecycle proposal for human review. `ephemeral` records why
+the request is conversational, operational, or already represented by reviewed
+context. A completed one-run outcome can be proposed as an intent whose initial
+status is `satisfied`, preserving history without making it active context.
+
+### Reclassification
+
+A human-reviewed repair for a statement with the wrong kind. Acceptance
+supersedes the old typed identity and creates a new intent, belief, or
+commitment; it never rewrites the old statement's history.
 
 ## Git
 

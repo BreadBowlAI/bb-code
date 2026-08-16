@@ -7,7 +7,8 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { addStatement, openWorkspace } from "@breadbowl/bb-core";
 import { MCP_TOOL_NAMES } from "../mcp/server.js";
-import { renderClaudeResponse, renderCodexResponse } from "../adapters/hook-adapter.js";
+import { installCursorProjectIntegration } from "../adapters/cursor-integration.js";
+import { renderClaudeResponse, renderCodexResponse, renderCursorResponse } from "../adapters/hook-adapter.js";
 import { resolveQkvConfiguration } from "../composition/qkv-config.js";
 import { humanActor, print } from "./io.js";
 
@@ -20,12 +21,13 @@ async function firstExisting(paths: string[]): Promise<string> {
   throw new Error(`Bundled integration files were not found (${paths.join(", ")})`);
 }
 
-async function pluginSource(host: "codex" | "claude"): Promise<string> {
+async function pluginSource(host: "codex" | "claude" | "cursor"): Promise<string> {
   const moduleDirectory = dirname(fileURLToPath(import.meta.url));
+  const sourcePath = host === "codex" ? "bb-code" : `${host}/bb-code`;
   return firstExisting([
     resolve(moduleDirectory, "plugins", host),
     resolve(moduleDirectory, "..", "plugins", host),
-    resolve(moduleDirectory, "../../../../plugins", host === "codex" ? "bb-code" : "claude/bb-code")
+    resolve(moduleDirectory, "../../../../plugins", sourcePath)
   ]);
 }
 
@@ -68,7 +70,7 @@ export function registerSetupCommands(program: Command): void {
     if (humanOnly.trim()) {
       await addStatement(workspace.root, { kind: "commitment", body: humanOnly.trim(), status: "accepted", scope: { kind: "repository" }, attributes: { rationale: "This decision requires explicit human authority", authority: humanActor, revisitCondition: "A human explicitly changes this boundary" }, evidenceSummary: "Explicitly accepted during bb init" });
     }
-    print("Ready. Run `bb integrate codex` or `bb integrate claude`.");
+    print("Ready. Run `bb integrate codex`, `bb integrate claude`, or `bb integrate cursor`.");
   });
 
   program.command("doctor").description("Check repository and integration prerequisites").action(async () => {
@@ -91,7 +93,7 @@ export function registerSetupCommands(program: Command): void {
     }
     if (MCP_TOOL_NAMES.length !== 4 || new Set(MCP_TOOL_NAMES).size !== 4) failures.push("MCP must initialize exactly four unique tools");
     else print(`ok MCP ${MCP_TOOL_NAMES.join(", ")}`);
-    if (!renderCodexResponse("UserPromptSubmit", { output: "smoke" }) || !renderClaudeResponse("UserPromptSubmit", { output: "smoke" })) failures.push("Hook response rendering failed");
+    if (!renderCodexResponse("UserPromptSubmit", { output: "smoke" }) || !renderClaudeResponse("UserPromptSubmit", { output: "smoke" }) || !renderCursorResponse("beforeSubmitPrompt", { output: "smoke" })) failures.push("Hook response rendering failed");
     else print("ok hook response formatter");
     const hostRuns = workspace.database.hostRunCounts(workspace.repositoryId);
     const hostActivity = Object.entries(hostRuns).filter(([, count]) => count > 0);
@@ -101,11 +103,15 @@ export function registerSetupCommands(program: Command): void {
     catch { print("warn Codex marketplace not registered; run `bb integrate codex`"); }
     try { await access(await pluginSource("claude")); print("ok Claude plugin bundle"); }
     catch (error) { failures.push(error instanceof Error ? error.message : String(error)); }
+    try { await access(await pluginSource("cursor")); print("ok Cursor plugin bundle"); }
+    catch (error) { failures.push(error instanceof Error ? error.message : String(error)); }
+    try { await access(resolve(workspace.root, ".cursor/hooks.json")); await access(resolve(workspace.root, ".cursor/mcp.json")); await access(resolve(workspace.root, ".cursor/rules/bb-code.mdc")); print("ok Cursor project integration"); }
+    catch { print("warn Cursor project integration not installed; run `bb integrate cursor`"); }
     if (failures.length) throw new Error(failures.join("\n"));
   });
 
   program.command("integrate <host>").description("Install or register a host integration").option("--copy-to <directory>", "copy the bundled plugin to a host plugin directory").action(async (host, options) => {
-    if (host !== "codex" && host !== "claude") throw new Error("host must be codex or claude");
+    if (host !== "codex" && host !== "claude" && host !== "cursor") throw new Error("host must be codex, claude, or cursor");
     if (options.copyTo) {
       const destination = resolve(options.copyTo, "bb-code");
       await cp(await pluginSource(host), destination, { recursive: true, force: true });
@@ -115,6 +121,11 @@ export function registerSetupCommands(program: Command): void {
     if (host === "codex") {
       const marketplace = await registerCodexMarketplace(workspace.root);
       print(`Registered the Codex marketplace at ${marketplace}. Open Codex /plugins, install and trust bb-code, then start a new Codex task and run \`bb doctor\`.`);
+      return;
+    }
+    if (host === "cursor") {
+      const installed = await installCursorProjectIntegration(workspace.root);
+      print(`Installed bb-code for Cursor in this project (${installed.hooksPath}, ${installed.mcpPath}, ${installed.rulePath}). Trust the workspace, reload Cursor, start a new Agent chat, then run \`bb doctor\`.`);
       return;
     }
     const marketplace = await claudeMarketplaceSource();

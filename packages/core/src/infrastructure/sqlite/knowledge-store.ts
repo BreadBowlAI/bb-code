@@ -52,6 +52,13 @@ export type QkvIndexDocument = {
   text: string;
 };
 
+export type KnowledgeAudit = {
+  statements: { total: number; active: number; byKind: Record<string, number>; allByKind: Record<string, number>; byStatus: Record<string, number>; repositoryScoped: number };
+  candidates: { total: number; byOperation: Record<string, number>; byState: Record<string, number> };
+  lifecycleTransitions: Record<string, number>;
+  review: { agentAuthorityCommitmentIds: string[]; activeIntentIds: string[] };
+};
+
 export class KnowledgeStore {
   constructor(
     private readonly connection: SqliteConnection,
@@ -90,6 +97,31 @@ export class KnowledgeStore {
   listStatements(repositoryId: string): CurrentStatement[] {
     const rows = this.connection.database.prepare("SELECT s.id,s.kind,s.created_at,r.id revision_id,r.revision_number,r.body,r.status,r.scope_kind,r.scope_path,r.attributes_json FROM statements s JOIN statement_revisions r ON r.id=s.current_revision_id WHERE s.repository_id=? ORDER BY s.created_at").all(repositoryId) as Record<string, unknown>[];
     return rows.map((row) => this.mapStatement(row));
+  }
+
+  audit(repositoryId: string): KnowledgeAudit {
+    const statements = this.listStatements(repositoryId);
+    const candidateRows = this.connection.database.prepare("SELECT operation,state FROM candidate_updates WHERE repository_id=?").all(repositoryId) as Array<{ operation: string; state: string }>;
+    const countBy = (values: string[]): Record<string, number> => {
+      const counts: Record<string, number> = {};
+      for (const value of values) counts[value] = (counts[value] ?? 0) + 1;
+      return counts;
+    };
+    const active = statements.filter((statement) => ACTIVE_STATUSES.has(statement.status));
+    const agentAuthorityCommitmentIds = active.flatMap((statement) => statement.kind === "commitment" && (statement.attributes as { authority?: { kind?: string } }).authority?.kind === "agent" ? [statement.id] : []);
+    return {
+      statements: {
+        total: statements.length,
+        active: active.length,
+        byKind: countBy(active.map((statement) => statement.kind)),
+        allByKind: countBy(statements.map((statement) => statement.kind)),
+        byStatus: countBy(statements.map((statement) => statement.status)),
+        repositoryScoped: active.filter((statement) => statement.scope.kind === "repository").length
+      },
+      candidates: { total: candidateRows.length, byOperation: countBy(candidateRows.map((row) => row.operation)), byState: countBy(candidateRows.map((row) => row.state)) },
+      lifecycleTransitions: countBy(candidateRows.filter((row) => ["satisfy", "abandon", "contradict", "supersede", "retire", "reclassify"].includes(row.operation)).map((row) => row.operation)),
+      review: { agentAuthorityCommitmentIds, activeIntentIds: active.filter((statement) => statement.kind === "intent").map((statement) => statement.id) }
+    };
   }
 
   explainStatement(id: string): { current: CurrentStatement; history: Array<Record<string, unknown>> } {
@@ -154,6 +186,17 @@ export class KnowledgeStore {
       const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, " ").trim();
       const duplicate = this.listStatements(repositoryId).find((statement) => statement.kind === proposal.kind && normalize(statement.body) === normalize(proposal.body));
       invariant(!duplicate, `A current ${proposal.kind} with the same statement already exists: ${duplicate?.id}. Revise, satisfy, supersede, or retire the existing statement instead.`, "duplicate_statement");
+      return proposal;
+    }
+    if (proposal.operation === "reclassify") {
+      const current = this.getStatement(proposal.targetStatementId, repositoryId);
+      invariant(ACTIVE_STATUSES.has(current.status), `Cannot reclassify a ${current.status} ${current.kind}`, "invalid_transition");
+      invariant(proposal.kind !== current.kind, `Statement ${current.id} is already a ${current.kind}`, "invalid_candidate_kind");
+      const replacementBody = (proposal.body ?? current.body).toLowerCase().replace(/\s+/g, " ").trim();
+      const duplicate = this.listStatements(repositoryId).find((statement) => statement.kind === proposal.kind && statement.body.toLowerCase().replace(/\s+/g, " ").trim() === replacementBody);
+      invariant(!duplicate, `A current ${proposal.kind} with the same statement already exists: ${duplicate?.id}`, "duplicate_statement");
+      const status: StatementStatus = proposal.kind === "commitment" ? "accepted" : proposal.kind === "intent" ? proposal.initialStatus : "active";
+      validateStatementValues({ kind: proposal.kind, status, attributes: proposal.attributes as StatementAttributes });
       return proposal;
     }
     const current = this.getStatement(proposal.targetStatementId!, repositoryId);
@@ -270,11 +313,36 @@ export class KnowledgeStore {
     const runId = row.run_id ? String(row.run_id) : undefined;
     const evidence = { kind: "agent_proposal", summary: proposal.rationale, paths: proposal.evidencePaths, ...(runId ? { runId } : {}), ...(row.created_git_view_id ? { gitViewId: String(row.created_git_view_id) } : {}) };
     if (proposal.operation === "create") {
-      const created = this.createStatement(repositoryId, { kind: proposal.kind!, body: proposal.body!, status: proposal.kind === "commitment" ? "accepted" : "active", scope: proposal.scope!, attributes: proposal.attributes as StatementAttributes, actor, evidence }, candidateId);
+      const status: StatementStatus = proposal.kind === "commitment" ? "accepted" : proposal.kind === "intent" ? proposal.initialStatus : "active";
+      const created = this.createStatement(repositoryId, { kind: proposal.kind!, body: proposal.body!, status, scope: proposal.scope!, attributes: proposal.attributes as StatementAttributes, actor, evidence }, candidateId);
       this.linkCandidateEvidence(candidateId, created.revisionId, "supports");
       return created;
     }
     const current = this.getStatement(proposal.targetStatementId!, repositoryId);
+    if (proposal.operation === "reclassify") {
+      this.appendRevision(current, {
+        body: current.body,
+        status: "superseded",
+        scope: current.scope,
+        attributes: current.attributes,
+        actor,
+        sourceCandidateId: candidateId,
+        evidence,
+        relationship: "supports"
+      });
+      const status: StatementStatus = proposal.kind === "commitment" ? "accepted" : proposal.kind === "intent" ? proposal.initialStatus : "active";
+      const replacement = this.createStatement(repositoryId, {
+        kind: proposal.kind,
+        body: proposal.body ?? current.body,
+        status,
+        scope: proposal.scope ?? current.scope,
+        attributes: proposal.attributes as StatementAttributes,
+        actor,
+        evidence
+      }, candidateId);
+      this.linkCandidateEvidence(candidateId, replacement.revisionId, "supports");
+      return replacement;
+    }
     if (proposal.operation === "confirm") {
       const evidenceId = this.insertEvidence(repositoryId, current.revisionId, "supports", evidence);
       this.connection.database.prepare("INSERT OR IGNORE INTO candidate_evidence VALUES(?,?)").run(candidateId, evidenceId);
@@ -282,7 +350,7 @@ export class KnowledgeStore {
       this.updateSearch(repositoryId, current);
       return current;
     }
-    const status: StatementStatus = proposal.operation === "contradict" ? "contradicted" : proposal.operation === "satisfy" ? "satisfied" : proposal.operation === "retire" ? "retired" : proposal.operation === "supersede" ? "superseded" : current.status;
+    const status: StatementStatus = proposal.operation === "contradict" ? "contradicted" : proposal.operation === "satisfy" ? "satisfied" : proposal.operation === "abandon" ? "abandoned" : proposal.operation === "retire" ? "retired" : proposal.operation === "supersede" ? "superseded" : current.status;
     let result = this.appendRevision(current, {
       body: proposal.operation === "supersede" ? current.body : proposal.body ?? current.body,
       status,
@@ -329,8 +397,9 @@ export class KnowledgeStore {
       this.search.indexStatement(statement.id, statement.revisionId, this.searchableText(statement));
       this.search.enqueueStatement(repositoryId, statement.id, statement.revisionId, "upsert");
     } else {
+      const wasIndexed = this.search.hasIndexedStatement(statement.id);
       this.search.removeStatementIndex(statement.id);
-      this.search.enqueueStatement(repositoryId, statement.id, undefined, "delete");
+      if (wasIndexed) this.search.enqueueStatement(repositoryId, statement.id, undefined, "delete");
     }
   }
 
@@ -348,6 +417,7 @@ export class KnowledgeStore {
   private validateOperation(operation: CandidateProposal["operation"], kind: StatementKind): void {
     if (operation === "contradict" && kind !== "belief") throw new BbError("Only beliefs may be contradicted", "invalid_operation");
     if (operation === "satisfy" && kind !== "intent") throw new BbError("Only intents may be satisfied", "invalid_operation");
+    if (operation === "abandon" && kind !== "intent") throw new BbError("Only intents may be abandoned", "invalid_operation");
     if (operation === "retire" && kind !== "commitment") throw new BbError("Only commitments may be retired", "invalid_operation");
   }
 
@@ -358,6 +428,6 @@ export class KnowledgeStore {
 
   private searchableText(statement: CurrentStatement): string {
     const scope = statement.scope.kind === "repository" ? "repository" : statement.scope.prefix;
-    return `${statement.id} ${statement.kind} ${statement.body} ${scope} ${toJson(statement.attributes)}`;
+    return `${statement.id} ${statement.body} ${scope}`;
   }
 }

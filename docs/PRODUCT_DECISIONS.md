@@ -41,7 +41,7 @@ and rejected in favor of ordinary, inspectable concepts.
 bb-code is a standalone runtime beside the coding agent, not a master agent.
 
 ```text
-Codex / Claude Code / future host
+Codex / Claude Code / Cursor / future host
   lifecycle hooks ──> host adapter ──> bb-code core
   MCP tools <──────────────────────────────┘
 ```
@@ -89,6 +89,8 @@ Trust is more important than maximizing the amount of remembered text.
 
 - Dogfood Codex first because it is the current development environment.
 - Add Claude Code second to prove the core is host-independent.
+- Add Cursor through its public project hooks, MCP configuration, and rules now
+  that its lifecycle surface covers prompts, tools, stop, and sessions.
 - Add OpenCode as an adapter/plugin, not a fork, after the two-host MVP.
 - Do not make bb-code the master of Codex or Claude for the MVP.
 - Preserve an owned-runtime option for later through supported SDK or app-server

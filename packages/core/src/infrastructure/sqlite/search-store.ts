@@ -3,6 +3,30 @@ import { createId } from "../../domain/ids.js";
 import type { SqliteConnection } from "./connection.js";
 import { now, toJson } from "./values.js";
 
+const LEXICAL_STOP_WORDS = new Set([
+  "the", "and", "for", "with", "from", "this", "that", "a", "an", "are", "as", "at", "be", "by", "can", "could", "did", "do", "does", "how", "i", "in", "is", "it", "of", "on", "or", "please", "should", "to", "we", "what", "when", "where", "which", "who", "why", "would", "you", "your"
+]);
+
+export type LexicalMatch = { statementId: string; score: number };
+
+function lexicalTerms(value: string, limit?: number): string[] {
+  const terms = [...new Set(value.toLowerCase().match(/[a-z0-9_/-]{2,}/g)?.filter((term) => !LEXICAL_STOP_WORDS.has(term)) ?? [])];
+  return limit === undefined ? terms : terms.slice(0, limit);
+}
+
+function minimumTermMatches(termCount: number): number {
+  if (termCount <= 1) return termCount;
+  if (termCount === 2) return 2;
+  return Math.min(4, Math.ceil(termCount / 2));
+}
+
+function termMatchesDocument(term: string, documentTokens: Set<string>): boolean {
+  if (documentTokens.has(term)) return true;
+  if (term.length < 4) return false;
+  for (const token of documentTokens) if (token.startsWith(term) || term.startsWith(token)) return true;
+  return false;
+}
+
 export type RetrievalJob = {
   id: string;
   repository_id: string;
@@ -43,32 +67,54 @@ export class SearchStore {
     database.prepare("DELETE FROM statement_search_documents WHERE statement_id=?").run(statementId);
   }
 
+  hasIndexedStatement(statementId: string): boolean {
+    return Boolean(this.connection.database.prepare("SELECT 1 FROM statement_search_documents WHERE statement_id=?").get(statementId));
+  }
+
   enqueueStatement(repositoryId: string, statementId: string, revisionId: string | undefined, operation: "upsert" | "delete" = "upsert"): void {
     const database = this.connection.database;
     database.prepare("DELETE FROM retrieval_jobs WHERE repository_id=? AND provider='qkv' AND statement_id=?").run(repositoryId, statementId);
     database.prepare("INSERT INTO retrieval_jobs(id,repository_id,provider,operation,statement_id,revision_id,state,attempts,next_attempt_at,last_error) VALUES(?,?,?,?,?,?,?,0,NULL,NULL)").run(createId("job"), repositoryId, "qkv", operation, statementId, revisionId ?? null, "pending");
   }
 
-  lexicalStatementIds(repositoryId: string, query: string, limit = 40): string[] {
+  lexicalMatches(repositoryId: string, query: string, limit = 40): LexicalMatch[] {
     const exactIds = [...query.matchAll(/(?:bb:)?((?:int|bel|com)_[0-9A-Za-z_-]+)/g)].map((match) => match[1]!).slice(0, limit);
-    const terms = query.toLowerCase().match(/[a-z0-9_/-]{2,}/g)?.filter((term) => !["the", "and", "for", "with", "from", "this", "that"].includes(term)).slice(0, 16) ?? [];
-    const ids: string[] = [];
+    const terms = lexicalTerms(query, 16);
+    const matches: LexicalMatch[] = [];
     for (const id of exactIds) {
       const exists = this.connection.database.prepare("SELECT 1 FROM statements WHERE id=? AND repository_id=?").get(id, repositoryId);
-      if (exists && !ids.includes(id)) ids.push(id);
+      if (exists && !matches.some((match) => match.statementId === id)) matches.push({ statementId: id, score: 1 });
     }
-    if (terms.length === 0 || ids.length >= limit) return ids;
-    const match = terms.map((term) => `"${term.replaceAll('"', '""')}"`).join(" OR ");
-    const rows = this.connection.database.prepare("SELECT f.statement_id FROM statement_fts f JOIN statements s ON s.id=f.statement_id WHERE statement_fts MATCH ? AND s.repository_id=? ORDER BY bm25(statement_fts) LIMIT ?").all(match, repositoryId, limit) as Array<{ statement_id: string }>;
-    for (const row of rows) if (!ids.includes(row.statement_id)) ids.push(row.statement_id);
-    return ids.slice(0, limit);
+    if (terms.length === 0 || matches.length >= limit) return matches;
+    const ftsMatch = terms.map((term) => `"${term.replaceAll('"', '""')}"${term.length >= 4 ? "*" : ""}`).join(" OR ");
+    const rows = this.connection.database.prepare(`SELECT f.statement_id,d.searchable_text,bm25(statement_fts) AS bm25_score
+      FROM statement_fts f JOIN statements s ON s.id=f.statement_id JOIN statement_search_documents d ON d.statement_id=f.statement_id
+      WHERE statement_fts MATCH ? AND s.repository_id=? ORDER BY bm25(statement_fts) LIMIT ?`).all(ftsMatch, repositoryId, Math.max(limit * 4, 40)) as Array<{ statement_id: string; searchable_text: string; bm25_score: number }>;
+    const required = minimumTermMatches(terms.length);
+    const scored = rows.flatMap((row) => {
+      const documentTokens = new Set(lexicalTerms(row.searchable_text));
+      const matched = terms.filter((term) => termMatchesDocument(term, documentTokens)).length;
+      const exactPathMatch = terms.some((term) => term.includes("/") && documentTokens.has(term));
+      if (matched < required && !exactPathMatch) return [];
+      const coverage = matched / terms.length;
+      const bm25TieBreaker = 1 / (1 + Math.abs(row.bm25_score));
+      return [{ statementId: row.statement_id, score: exactPathMatch ? Math.max(0.95, coverage) : Math.min(1, coverage * 0.9 + bm25TieBreaker * 0.1) }];
+    }).sort((left, right) => right.score - left.score);
+    for (const match of scored) if (!matches.some((item) => item.statementId === match.statementId)) matches.push(match);
+    return matches.slice(0, limit);
+  }
+
+  lexicalStatementIds(repositoryId: string, query: string, limit = 40): string[] {
+    return this.lexicalMatches(repositoryId, query, limit).map((match) => match.statementId);
   }
 
   logRetrieval(input: { repositoryId: string; runId?: string; gitViewId: string; query: string; paths: string[]; providerStatus: unknown; renderedTokenCount: number; items: ContextItem[] }): string {
     const database = this.connection.database;
     const id = createId("ret");
     database.prepare("INSERT INTO retrievals VALUES(?,?,?,?,?,?,?,?,?)").run(id, input.repositoryId, input.runId ?? null, input.gitViewId, input.query, toJson(input.paths), toJson(input.providerStatus), input.renderedTokenCount, now());
-    for (const item of input.items) database.prepare("INSERT INTO retrieval_items VALUES(?,?,?,?,?,?,?,?,?)").run(id, item.id, item.revisionId, item.rank, item.lexicalRank ?? null, item.semanticRank ?? null, item.finalScore, item.applicabilityReason, item.freshness);
+    for (const item of input.items) database.prepare(`INSERT INTO retrieval_items(
+      retrieval_id,statement_id,revision_id,rank,lexical_rank,semantic_rank,final_score,applicability_reason,freshness,lexical_score,semantic_score
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(id, item.id, item.revisionId, item.rank, item.lexicalRank ?? null, item.semanticRank ?? null, item.finalScore, item.applicabilityReason, item.freshness, item.lexicalScore ?? null, item.semanticScore ?? null);
     return id;
   }
 

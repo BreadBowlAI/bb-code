@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { invariant } from "../../domain/errors.js";
 import { createId } from "../../domain/ids.js";
+import type { RequestIntentDecision } from "../../domain/runtime.js";
 import type { SqliteConnection } from "./connection.js";
 import { now, toJson } from "./values.js";
 
@@ -27,8 +28,17 @@ export type FinishRunRecord = {
   summary: string;
   verification: unknown[];
   effects: Array<{ statementId: string; effect: string; note?: string }>;
+  requestIntent: RequestIntentDecision;
   endGitViewId?: string;
   noDurableLearningReason?: string;
+};
+
+export type LearningMetrics = {
+  runs: number;
+  requestIntents: { durable: number; ephemeral: number; missing: number };
+  retrievals: number;
+  retrievedItems: number;
+  contextEffects: { material: number; noEffect: number };
 };
 
 export class RunStore {
@@ -70,6 +80,14 @@ export class RunStore {
     return row?.id;
   }
 
+  latestRunningRunForRequest(repositoryId: string, worktreeId: string, prompt: string): string | undefined {
+    const row = this.connection.database.prepare(`SELECT r.id FROM runs r
+      JOIN agent_sessions s ON s.id=r.agent_session_id
+      WHERE s.repository_id=? AND s.worktree_id=? AND r.prompt=? AND r.status='running'
+      ORDER BY r.started_at DESC LIMIT 1`).get(repositoryId, worktreeId, prompt) as { id: string } | undefined;
+    return row?.id;
+  }
+
   belongsToRepository(runId: string, repositoryId: string): boolean {
     return Boolean(this.connection.database.prepare("SELECT 1 FROM runs r JOIN agent_sessions s ON s.id=r.agent_session_id WHERE r.id=? AND s.repository_id=?").get(runId, repositoryId));
   }
@@ -82,11 +100,38 @@ export class RunStore {
     return Boolean(this.connection.database.prepare("SELECT 1 FROM run_events WHERE run_id=? AND consequential=1 LIMIT 1").get(runId));
   }
 
+  hasToolEvents(runId: string): boolean {
+    return Boolean(this.connection.database.prepare("SELECT 1 FROM run_events WHERE run_id=? AND kind='after_tool' LIMIT 1").get(runId));
+  }
+
   hostRunCounts(repositoryId: string): Record<string, number> {
     const rows = this.connection.database.prepare(`SELECT s.host, COUNT(*) AS count
       FROM runs r JOIN agent_sessions s ON s.id=r.agent_session_id
       WHERE s.repository_id=? GROUP BY s.host`).all(repositoryId) as Array<{ host: string; count: number }>;
     return Object.fromEntries(rows.map((row) => [row.host, Number(row.count)]));
+  }
+
+  learningMetrics(repositoryId: string): LearningMetrics {
+    const database = this.connection.database;
+    const runs = Number((database.prepare("SELECT COUNT(*) AS n FROM runs r JOIN agent_sessions s ON s.id=r.agent_session_id WHERE s.repository_id=?").get(repositoryId) as { n: number }).n);
+    const decisions = database.prepare(`SELECT COALESCE(json_extract(r.request_intent_json,'$.disposition'),'missing') AS disposition,COUNT(*) AS n
+      FROM runs r JOIN agent_sessions s ON s.id=r.agent_session_id WHERE s.repository_id=? GROUP BY disposition`).all(repositoryId) as Array<{ disposition: string; n: number }>;
+    const decisionCount = (disposition: string) => Number(decisions.find((row) => row.disposition === disposition)?.n ?? 0);
+    const retrievals = Number((database.prepare("SELECT COUNT(*) AS n FROM retrievals WHERE repository_id=?").get(repositoryId) as { n: number }).n);
+    const retrievedItems = Number((database.prepare("SELECT COUNT(*) AS n FROM retrieval_items i JOIN retrievals r ON r.id=i.retrieval_id WHERE r.repository_id=?").get(repositoryId) as { n: number }).n);
+    const effects = database.prepare(`SELECT CASE WHEN c.effect='no_effect' THEN 'no_effect' ELSE 'material' END AS outcome,COUNT(*) AS n
+      FROM context_effects c JOIN runs r ON r.id=c.run_id JOIN agent_sessions s ON s.id=r.agent_session_id
+      WHERE s.repository_id=? GROUP BY outcome`).all(repositoryId) as Array<{ outcome: string; n: number }>;
+    return {
+      runs,
+      requestIntents: { durable: decisionCount("durable"), ephemeral: decisionCount("ephemeral"), missing: decisionCount("missing") },
+      retrievals,
+      retrievedItems,
+      contextEffects: {
+        material: Number(effects.find((row) => row.outcome === "material")?.n ?? 0),
+        noEffect: Number(effects.find((row) => row.outcome === "no_effect")?.n ?? 0)
+      }
+    };
   }
 
   startGitViewId(runId: string): string | undefined {
@@ -127,7 +172,7 @@ export class RunStore {
         invariant(retrieval, `Statement ${effect.statementId} was not retrieved for run ${input.runId}`, "invalid_context_effect");
         return { effect, retrievalId: retrieval.retrieval_id };
       });
-      database.prepare("UPDATE runs SET status=?,summary=?,verification_json=?,finish_tool_called=1,end_git_view_id=COALESCE(?,end_git_view_id),no_durable_learning_reason=?,finished_at=? WHERE id=?").run(input.outcome, input.summary, toJson(input.verification), input.endGitViewId ?? null, input.noDurableLearningReason ?? null, now(), input.runId);
+      database.prepare("UPDATE runs SET status=?,summary=?,verification_json=?,finish_tool_called=1,end_git_view_id=COALESCE(?,end_git_view_id),no_durable_learning_reason=?,request_intent_json=?,finished_at=? WHERE id=?").run(input.outcome, input.summary, toJson(input.verification), input.endGitViewId ?? null, input.noDurableLearningReason ?? null, toJson(input.requestIntent), now(), input.runId);
       for (const item of effectRows) database.prepare("INSERT INTO context_effects(id,run_id,statement_id,effect,note,created_at,retrieval_id) VALUES(?,?,?,?,?,?,?)").run(`ce_${createId("evt").slice(4)}`, input.runId, item.effect.statementId, item.effect.effect, item.effect.note ?? null, now(), item.retrievalId);
     });
   }
@@ -136,11 +181,6 @@ export class RunStore {
     const database = this.connection.database;
     const row = database.prepare("SELECT stop_nudge_count,finish_tool_called,status FROM runs WHERE id=?").get(runId) as { stop_nudge_count: number; finish_tool_called: number; status: string } | undefined;
     if (!row || row.finish_tool_called || row.status !== "running") return "none";
-    const eventCount = Number((database.prepare("SELECT COUNT(*) AS n FROM run_events WHERE run_id=? AND consequential=1").get(runId) as { n: number }).n);
-    if (eventCount === 0) {
-      database.prepare("UPDATE runs SET status='completed',summary='Finished without consequential tool events',finished_at=? WHERE id=?").run(now(), runId);
-      return "finalized";
-    }
     if (row.stop_nudge_count > 0) {
       database.prepare("UPDATE runs SET status='partial',summary='Agent ended without bb_finish_run',finished_at=? WHERE id=?").run(now(), runId);
       return "finalized";

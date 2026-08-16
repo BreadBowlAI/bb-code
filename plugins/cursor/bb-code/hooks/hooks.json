@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [{ "command": "bb adapter cursor sessionStart" }],
+    "beforeSubmitPrompt": [{ "command": "bb adapter cursor beforeSubmitPrompt" }],
+    "preToolUse": [{ "command": "bb adapter cursor preToolUse" }],
+    "postToolUse": [{ "command": "bb adapter cursor postToolUse" }],
+    "postToolUseFailure": [{ "command": "bb adapter cursor postToolUseFailure" }],
+    "stop": [{ "command": "bb adapter cursor stop", "loop_limit": 1 }],
+    "sessionEnd": [{ "command": "bb adapter cursor sessionEnd" }]
+  }
+}

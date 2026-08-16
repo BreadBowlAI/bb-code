@@ -6,6 +6,7 @@ describe("proposal guidance", () => {
     expect(PROPOSAL_GUIDANCE).toContain('"the repository currently uses PostgreSQL" is a belief');
     expect(PROPOSAL_GUIDANCE).toContain('"production persistence must use PostgreSQL" is a commitment');
     expect(PROPOSAL_GUIDANCE).toContain("knowledge likely to change how a future agent works");
-    expect(PROPOSAL_GUIDANCE).toContain("Prefer revise, satisfy, supersede, or retire");
+    expect(PROPOSAL_GUIDANCE).toContain("Prefer revise, satisfy, abandon, supersede, retire, or reclassify");
+    expect(PROPOSAL_GUIDANCE).toContain("initialStatus");
   });
 });

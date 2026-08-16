@@ -10,7 +10,7 @@ describe("context effect linkage", () => {
       const sessionId = fixture.database.startSession({ repositoryId: fixture.repositoryId, worktreeId: fixture.worktreeId, host: "codex", externalSessionId: "effects" });
       const runId = fixture.database.startRun({ sessionId, prompt: "search", gitViewId: fixture.gitViewId });
       fixture.database.logRetrieval({ repositoryId: fixture.repositoryId, runId, gitViewId: fixture.gitViewId, query: "search", paths: [], providerStatus: { local: "ok" }, renderedTokenCount: 20, items: [{ ...statement, rank: 1, finalScore: 1, freshness: "fresh", applicabilityReason: "repository-wide" }] });
-      expect(() => fixture.database.completeRun(fixture.repositoryId, { runId, outcome: "completed", summary: "Used prior context", verification: [], effects: [{ statementId: statement.id, effect: "changed_plan" }], endGitViewId: fixture.gitViewId, proposals: [] })).not.toThrow();
+      expect(() => fixture.database.completeRun(fixture.repositoryId, { runId, outcome: "completed", summary: "Used prior context", verification: [], effects: [{ statementId: statement.id, effect: "changed_plan" }], requestIntent: { disposition: "ephemeral", reason: "The test request is scoped to this run" }, endGitViewId: fixture.gitViewId, proposals: [] })).not.toThrow();
     } finally { fixture.dispose(); }
   });
 });

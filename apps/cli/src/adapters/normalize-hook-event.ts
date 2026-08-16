@@ -1,6 +1,6 @@
 import type { RuntimeEvent } from "@breadbowl/bb-core";
 
-export type Host = "codex" | "claude";
+export type Host = "codex" | "claude" | "cursor";
 
 const EVENT_NAMES: Record<string, RuntimeEvent["event"]> = {
   SessionStart: "session_start",
@@ -10,7 +10,14 @@ const EVENT_NAMES: Record<string, RuntimeEvent["event"]> = {
   PostToolUseFailure: "after_tool",
   PostToolUseBatch: "after_tool",
   Stop: "finish_run",
-  SessionEnd: "session_end"
+  SessionEnd: "session_end",
+  sessionStart: "session_start",
+  beforeSubmitPrompt: "start_run",
+  preToolUse: "before_tool",
+  postToolUse: "after_tool",
+  postToolUseFailure: "after_tool",
+  stop: "finish_run",
+  sessionEnd: "session_end"
 };
 
 function text(value: unknown, fallback: string): string {
@@ -43,7 +50,8 @@ export function normalizeHookEvent(input: { host: Host; nativeEventName: string;
   const event = EVENT_NAMES[input.nativeEventName];
   if (!event) return undefined;
   const payload = input.payload;
-  const turnId = typeof (payload.turn_id ?? payload.turnId) === "string" ? String(payload.turn_id ?? payload.turnId) : undefined;
+  const nativeTurnId = payload.turn_id ?? payload.turnId ?? payload.generation_id;
+  const turnId = typeof nativeTurnId === "string" ? nativeTurnId : undefined;
   const batch = batchRecords(payload);
   const batchIds = batch.map((item) => item.tool_use_id ?? item.toolUseId ?? item.id).filter((value): value is string => typeof value === "string");
   const nativeToolUseId = payload.tool_use_id ?? payload.toolUseId ?? payload.batch_id ?? payload.batchId;
@@ -62,10 +70,10 @@ export function normalizeHookEvent(input: { host: Host; nativeEventName: string;
     prompt: payload.prompt ?? payload.user_prompt,
     tool_name: toolName,
     tool_category: category,
-    outcome: explicitOutcome ?? (payload.success === false || batchFailed || input.nativeEventName === "PostToolUseFailure" ? "failed" : payload.success === true ? "success" : undefined),
+    outcome: explicitOutcome ?? (payload.success === false || batchFailed || ["PostToolUseFailure", "postToolUseFailure"].includes(input.nativeEventName) ? "failed" : payload.success === true || ["PostToolUse", "postToolUse"].includes(input.nativeEventName) ? "success" : undefined),
     path: payload.path ?? payload.file_path ?? toolInput.path ?? toolInput.file_path,
     paths: payload.paths ?? toolInput.paths ?? (batchPaths.length ? batchPaths : undefined),
-    duration_ms: payload.duration_ms ?? payload.durationMs
+    duration_ms: payload.duration_ms ?? payload.durationMs ?? payload.duration
   };
   return {
     schemaVersion: 1,

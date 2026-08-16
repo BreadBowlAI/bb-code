@@ -10,6 +10,7 @@ await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 await cp(resolve(repositoryRoot, "plugins/bb-code"), resolve(output, "codex"), { recursive: true });
 await cp(resolve(repositoryRoot, "plugins/claude/bb-code"), resolve(output, "claude"), { recursive: true });
+await cp(resolve(repositoryRoot, "plugins/cursor/bb-code"), resolve(output, "cursor"), { recursive: true });
 await mkdir(resolve(output, "claude-marketplace/.claude-plugin"), { recursive: true });
 await mkdir(resolve(output, "claude-marketplace/plugins/claude"), { recursive: true });
 await cp(resolve(repositoryRoot, ".claude-plugin/marketplace.json"), resolve(output, "claude-marketplace/.claude-plugin/marketplace.json"));

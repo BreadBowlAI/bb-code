@@ -4,7 +4,7 @@ This document is the implementation contract for `0.1.0`. The checked-in code is
 
 ## Product position
 
-bb-code is not another coding agent and does not orchestrate one. Codex and Claude Code remain responsible for planning, tool use, edits, and verification. bb-code is a standalone continuity runtime beside them. Lifecycle hooks tell it when work begins and ends; MCP lets the active agent retrieve and submit structured information.
+bb-code is not another coding agent and does not orchestrate one. Codex, Claude Code, and Cursor remain responsible for planning, tool use, edits, and verification. bb-code is a standalone continuity runtime beside them. Lifecycle hooks tell it when work begins and ends; MCP lets the active agent retrieve and submit structured information.
 
 The open-source runtime owns durable data, Git applicability, local retrieval, review, and integrations. QKV is an optional proprietary candidate generator. This gives users a useful local product with a clean upgrade path and avoids a fork of any agent host.
 
@@ -12,7 +12,7 @@ The open-source runtime owns durable data, Git applicability, local retrieval, r
 
 ```text
 apps/cli/src/commands/               human CLI command groups
-apps/cli/src/adapters/               Codex/Claude hook translation
+apps/cli/src/adapters/               Codex/Claude/Cursor hook translation
 apps/cli/src/mcp/                    four-tool MCP delivery surface
 packages/core/src/domain/            stable concepts and validation
 packages/core/src/application/       use-case workflows
@@ -22,6 +22,7 @@ packages/core/tests/                 unit, integration, and support fixtures
 packages/qkv-client/                 optional remote semantic provider
 plugins/bb-code/          Codex plugin
 plugins/claude/bb-code/   Claude Code plugin
+plugins/cursor/bb-code/   Cursor plugin
 .agents/plugins/          Codex local marketplace
 .claude-plugin/           Claude Code marketplace
 docs/                     architecture, schema, privacy, plan
@@ -33,12 +34,15 @@ docs/                     architecture, schema, privacy, plan
 bb init
 bb integrate codex
 bb integrate claude
+bb integrate cursor
 bb doctor
 
 bb add intent
 bb add belief
 bb add commitment
 bb status
+bb audit [--json]
+bb reclassify <statement-id> <intent|belief|commitment>
 bb context "<request>" [--path <path>] [--json]
 bb explain <statement-id> [--json]
 bb review [candidate-id]
@@ -50,6 +54,7 @@ bb sync [--force]
 bb mcp serve
 bb adapter codex <event>
 bb adapter claude <event>
+bb adapter cursor <event>
 ```
 
 Direct commitment creation requires explicit confirmation. Agent-facing interfaces can only propose a commitment.
@@ -68,12 +73,15 @@ bb_finish_run({
   summary: string,
   verification: Verification[],
   contextEffects: ContextEffect[],
+  requestIntent:
+    | { disposition: "ephemeral", reason: string }
+    | { disposition: "durable", proposal: IntentCandidateProposal },
   proposals: CandidateProposal[],
   noDurableLearningReason?: string
 })
 ```
 
-`bb_finish_run` is the end-of-run learning boundary. The coding agent submits structured learning using reasoning it already performed. Always-on hook context and MCP descriptions use one classification rubric: intents are active outcomes, beliefs are fallible claims about current implementation or behavior, and commitments are explicit future rules, constraints, or chosen decisions. Implementing, verifying, or approving code does not by itself turn a current fact into a commitment. Before creating a statement, agents compare retrieved context and prefer the existing statement lifecycle over duplicates. Exact same-kind duplicates are rejected deterministically. Agents report a context effect by statement ID when retrieved context changed the plan, caused clarification, avoided a violation, or changed verification. Agents propose only knowledge likely to affect future work, omitting trivial-to-rediscover facts and temporary details. A consequential run must have at least one proposal submitted during the run or provide a non-empty, specific `noDurableLearningReason`. bb-code does not invoke a second extraction model.
+`bb_finish_run` is the end-of-run learning boundary. The coding agent submits structured learning using reasoning it already performed. Every completion separately classifies the request: an outcome that should survive the run produces a human-reviewed intent proposal, while a conversational or operational request records a specific ephemeral reason. Intent creates may start `active`, `satisfied`, or `abandoned`, allowing a one-run outcome to retain an honest lifecycle without becoming retrievable after completion. Always-on hook context and MCP descriptions use one classification rubric: intents are outcomes, beliefs are fallible claims about current implementation or behavior, and commitments are explicit future rules, constraints, or chosen decisions. Implementing, verifying, or approving code does not by itself turn a current fact into a commitment. Read-only investigations may produce beliefs when a non-obvious finding would prevent repeated inspection. Before creating a statement, agents compare retrieved context and prefer the existing statement lifecycle over duplicates. Exact same-kind duplicates are rejected deterministically. Agents report a context effect by statement ID when retrieved context changed the plan, caused clarification, avoided a violation, or changed verification. Agents propose only knowledge likely to affect future work, omitting trivial-to-rediscover facts and temporary details. A tool-assisted run must have at least one non-request proposal submitted during the run or provide a non-empty, specific `noDurableLearningReason`. bb-code does not invoke a second extraction model.
 
 ## Domain
 
@@ -93,7 +101,7 @@ type ActorRef = {
 
 Intents are `active | satisfied | abandoned | superseded`. Beliefs are `active | contradicted | superseded`. Commitments are `accepted | superseded | retired`. Proposed is not a status; proposals live in the candidate queue.
 
-Candidate operations are `create | revise | confirm | contradict | satisfy | supersede | retire`. Create requires a kind, body, scope, and matching attributes. Other operations require a target. Only beliefs may be contradicted, only intents satisfied, and only commitments retired. No proposal becomes durable without review.
+Candidate operations are `create | revise | confirm | contradict | satisfy | abandon | supersede | retire | reclassify`. Create requires a kind, body, scope, and matching attributes. Other operations require a target. Only beliefs may be contradicted, only intents satisfied or abandoned, and only commitments retired. Reclassification is an atomic human-reviewed repair: the old typed statement is superseded and a correctly typed replacement receives a new identity. No proposal becomes durable without review.
 
 ## Runtime protocol
 
@@ -102,7 +110,7 @@ Adapters emit one host-independent envelope:
 ```ts
 type RuntimeEvent = {
   schemaVersion: 1
-  host: "codex" | "claude"
+  host: "codex" | "claude" | "cursor"
   event:
     | "session_start"
     | "start_run"
@@ -132,7 +140,7 @@ worktrees(repository_location_id, canonical_root, git_dir)
 git_views(repository_id, worktree_id, commit, tree, parents, patch_id, dirty_fingerprint, changed_paths, branch)
 
 agent_sessions(repository_id, worktree_id, host, external_session_id)
-runs(session, prompt, status, start_view, end_view, verification, finish_called, no_durable_learning_reason)
+runs(session, prompt, status, start_view, end_view, verification, finish_called, request_intent, no_durable_learning_reason)
 run_events(run, sequence, kind, external_event_id, git_view, consequential, tool, outcome, paths, sanitized_payload)
 
 statements(repository_id, kind, current_revision_id, created_by)
@@ -149,7 +157,7 @@ statement_fts
 retrieval_provider_state
 retrieval_jobs
 retrievals
-retrieval_items
+retrieval_items(lexical_score, semantic_score)
 context_effects(retrieval_id, run_id, statement_id, effect)
 ```
 
@@ -179,17 +187,17 @@ The bootstrap skill may inspect repository documents and propose context, but do
 
 ### Run start
 
-1. Normalize `UserPromptSubmit` into `start_run`.
+1. Normalize `UserPromptSubmit` (Codex/Claude) or `beforeSubmitPrompt` (Cursor) into `start_run`.
 2. Reconcile repository and Git state.
 3. Create or resume the session and create a run.
 4. Retrieve local FTS candidates and, when enabled, QKV candidates with a 1.2-second timeout.
-5. Fuse FTS top 40 and semantic top 40 from `candidate_k=100` with reciprocal rank fusion (`k = 60`), then apply status, scope, ancestry, dirty-worktree, branch, path, freshness, and conflict policy.
-6. Abstain when neither provider finds a relevant statement and render at most 12 items, 1,200 deterministic tokens, and 4,800 characters.
-7. Log the rendered items and inject the run ID plus the requirement to call `bb_finish_run`.
+5. Filter lexical candidates by meaningful term coverage, select the statistically distinct head of the semantic score distribution, fuse provider ranks and scores with reciprocal rank fusion (`k = 60`), then apply status, scope, ancestry, dirty-worktree, branch, path, freshness, conflict, and near-duplicate policy.
+6. Abstain when lexical coverage is insufficient or semantic scores are flat, and render at most 12 items, 1,200 deterministic tokens, and 4,800 characters.
+7. Log the rendered items and inject the run ID plus the requirement to call `bb_finish_run`. Codex and Claude receive this directly from their prompt hook. Cursor's project rule calls `bb_context` with the exact user prompt; that retrieval binds to the prompt-hook run and returns the same run ID because Cursor's documented pre-prompt response cannot inject context.
 
 ### Run finish
 
-The agent records outcome, verification, effects, and its explicit learning decision in one transaction. Context effects must reference an item logged for that run. Consequential runs cannot finish with an unexplained empty proposal set; proposals previously submitted through `bb_propose_update` count toward the decision. A Stop hook nudges once only after consequential writes, verification, or failures. Candidate acceptance, including edit-and-accept, is a separate human CLI action that preserves the original proposal.
+The agent records outcome, verification, effects, its request-intent disposition, and its explicit learning decision in one transaction. Context effects must reference an item logged for that run. Tool-assisted runs cannot finish with an unexplained empty non-request proposal set; proposals previously submitted through `bb_propose_update` count toward the decision. A Stop hook nudges once whenever `bb_finish_run` was omitted, including read-only or conversational runs, so every request receives an intent disposition. Candidate acceptance, including kind/scope/attribute correction, is a separate human CLI action that preserves the original proposal.
 
 ## Git behavior
 
@@ -206,10 +214,11 @@ Never send raw code, diffs, stored/raw prompts, tool input/output, secrets, envi
 - A repository initializes with only `.bb/repo.json` committed.
 - Intent, belief, and explicitly confirmed commitment creation works.
 - Local context retrieval is useful with QKV disabled.
-- Codex and Claude hooks create runs and inject context.
+- Codex, Claude, and Cursor hooks create runs; Codex and Claude inject prompt context directly, while Cursor retrieves it through the always-applied project rule and exact-request run binding.
 - One before/after pair is retained for each host tool-use ID while duplicate delivery of either phase remains idempotent.
 - MCP exposes exactly the four named tools.
-- `bb_finish_run` queues proposals or records an explicit no-learning reason for consequential work; it cannot accept proposals.
+- `bb_finish_run` records a request-intent disposition and queues proposals or an explicit no-learning reason for tool-assisted work; it cannot accept proposals.
+- `bb audit` exposes lifecycle balance and consequential-recall metrics, and reviewed reclassification repairs a wrong kind without rewriting history.
 - Completion and review transitions are transactional and tested.
 - QKV is optional and degrades to local retrieval.
 - Type checking, behavior tests, the release acceptance harness, build, plugin validation, packaged installation, concurrent-host WAL, and 10,000-statement performance gates pass on Node 24.

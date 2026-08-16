@@ -14,7 +14,11 @@ export async function runHookAdapter(host: Host, nativeEventName: string): Promi
     const event = normalizeHookEvent({ host, nativeEventName, payload: await readStdin(), defaultCwd: process.cwd() });
     if (!event) return;
     const output = await processRuntimeEvent(event, undefined, await configuredSemantic(event.cwd));
-    const response = host === "codex" ? renderCodexResponse(nativeEventName, output) : renderClaudeResponse(nativeEventName, output);
+    const response = host === "codex"
+      ? renderCodexResponse(nativeEventName, output)
+      : host === "claude"
+        ? renderClaudeResponse(nativeEventName, output)
+        : renderCursorResponse(nativeEventName, output);
     if (response) process.stdout.write(JSON.stringify(response));
   } catch (error) {
     process.stderr.write(`[bb-code] ${error instanceof Error ? error.message : String(error)}\n`);
@@ -31,5 +35,14 @@ export function renderCodexResponse(nativeEventName: string, output: { output?: 
 export function renderClaudeResponse(nativeEventName: string, output: { output?: string; nudge?: string }): Record<string, unknown> | undefined {
   if (output.output) return { hookSpecificOutput: { hookEventName: nativeEventName, additionalContext: output.output } };
   if (output.nudge) return { decision: "block", reason: output.nudge };
+  return undefined;
+}
+
+export function renderCursorResponse(nativeEventName: string, output: { output?: string; nudge?: string }): Record<string, unknown> | undefined {
+  if (output.nudge && nativeEventName === "stop") return { followup_message: output.nudge };
+  if (output.output && nativeEventName === "sessionStart") return { additional_context: output.output };
+  if (output.output && nativeEventName === "postToolUse") return { additional_context: output.output };
+  if (nativeEventName === "beforeSubmitPrompt") return { continue: true };
+  if (nativeEventName === "preToolUse") return { permission: "allow" };
   return undefined;
 }

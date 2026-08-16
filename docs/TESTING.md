@@ -14,12 +14,12 @@ packages/core/tests/
   support/           reusable fixtures; never test cases
 
 packages/qkv-client/tests/unit/
-apps/cli/tests/unit/adapters/
+apps/cli/tests/unit/adapters/        native Codex, Claude, and Cursor translation
 ```
 
 Each `*.test.ts` file owns one behavior and normally one test case. A file name should explain the failure without opening it—for example, `candidate-review.test.ts` or `run-stop-policy.test.ts`.
 
-Unit tests must not open SQLite, execute Git, or use the network. Integration tests may use a temporary real database and must dispose it in `finally`. Transport tests use injected `fetch`; hook-normalization tests call the pure normalizer rather than starting a process.
+Unit tests must not open SQLite, execute Git, or use the network. Integration tests may use a temporary real database and must dispose it in `finally`. Transport tests use injected `fetch`; hook-normalization tests call the pure normalizer rather than starting a process. Cursor installation tests use a temporary project directory and verify existing JSON configuration is merged rather than replaced.
 
 Commands:
 
@@ -38,6 +38,8 @@ pnpm test:performance
 `pnpm typecheck` checks production and test TypeScript. The default test command finds tests only under explicit `tests` directories, preventing production files from becoming accidental test containers.
 
 The acceptance command exercises the cross-agent Codex → pending proposal → human review → Claude retrieval flow and composes the branch visibility, changed-blob freshness, semantic fallback, token-budget, and four-tool contract scenarios into one release gate.
+
+Focused learning-loop tests cover completed request intents, read-only diagnostic decisions, quiet-run Stop nudges, review-time kind correction, and atomic statement reclassification. Retrieval hard negatives must include real dogfood failures: generic word overlap must abstain, and a flat semantic score distribution must not inject arbitrary context.
 
 CI runs functional checks on macOS and Linux with Node 24. The normal test suite already includes the acceptance flow, so CI does not run that subset twice. Performance thresholds remain a local release check because shared-runner timing is not stable enough for a deterministic gate. Live QKV is a separate manually dispatched workflow protected by dedicated tenant credentials; it upserts a synthetic document, searches, and deletes it. Normal tests inject transport fakes, verify the server's documents-array and partial-failure contract, and assert that private run data never reaches remote documents. The final consequential-recall release proof is a real dogfood observation and cannot be replaced by the deterministic acceptance fixture.
 

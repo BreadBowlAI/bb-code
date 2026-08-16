@@ -1,0 +1,8 @@
+---
+description: Use reviewed bb-code context and finish active bb-code runs
+alwaysApply: true
+---
+
+At the start of every coding request, call `bb_context` with the user's request and any relevant paths before planning or editing. Treat returned commitments as constraints, beliefs as fallible context, and intents as goals. Report statement IDs through `contextEffects` when they materially affect the work.
+
+The `bb_context` result includes the active run ID when its request exactly matches the current user prompt. Before ending consequential work, call `bb_finish_run` with that run ID. Propose only durable knowledge likely to change future work, and never accept a proposal yourself. If there is no useful durable learning, provide a specific `noDurableLearningReason`.

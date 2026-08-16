@@ -1,7 +1,7 @@
 import type { ContextItem } from "../../domain/context.js";
 import { invariant } from "../../domain/errors.js";
 import type { ActorRef, CandidateProposal, CurrentStatement, StatementDraft } from "../../domain/knowledge.js";
-import type { GitView } from "../../domain/runtime.js";
+import type { GitView, RequestIntentDecision } from "../../domain/runtime.js";
 import { KnowledgeStore, type CandidateRecord, type EvidenceAnchor, type QkvIndexDocument } from "./knowledge-store.js";
 import { RepositoryStore, type RepositoryRegistration, type KnownWorktree } from "./repository-store.js";
 import { RunStore, type FinishRunRecord, type RunEventInput } from "./run-store.js";
@@ -38,6 +38,7 @@ export class BbDatabase {
   endSession(host: string, externalSessionId: string): void { this.runs.endSession(host, externalSessionId); }
   startRun(input: Parameters<RunStore["startRun"]>[0]): string { return this.runs.startRun(input); }
   latestRunningRun(host: string, externalSessionId: string): string | undefined { return this.runs.latestRunningRun(host, externalSessionId); }
+  latestRunningRunForRequest(repositoryId: string, worktreeId: string, prompt: string): string | undefined { return this.runs.latestRunningRunForRequest(repositoryId, worktreeId, prompt); }
   addRunEvent(runId: string, event: RunEventInput): boolean { return this.runs.addEvent(runId, event); }
   finishRun(input: FinishRunRecord): void { this.runs.finish(input); }
   handleStop(runId: string): "none" | "nudge" | "finalized" { return this.runs.handleStop(runId); }
@@ -50,6 +51,7 @@ export class BbDatabase {
   createStatement(repositoryId: string, draft: StatementDraft, sourceCandidateId?: string): CurrentStatement { return this.knowledge.createStatement(repositoryId, draft, sourceCandidateId); }
   getStatement(id: string, repositoryId?: string): CurrentStatement { return this.knowledge.getStatement(id, repositoryId); }
   listStatements(repositoryId: string): CurrentStatement[] { return this.knowledge.listStatements(repositoryId); }
+  audit(repositoryId: string): { knowledge: ReturnType<KnowledgeStore["audit"]>; learning: ReturnType<RunStore["learningMetrics"]> } { return { knowledge: this.knowledge.audit(repositoryId), learning: this.runs.learningMetrics(repositoryId) }; }
   explainStatement(id: string): { current: CurrentStatement; history: Array<Record<string, unknown>> } { return this.knowledge.explainStatement(id); }
   propose(repositoryId: string, runId: string | undefined, input: CandidateProposal, gitViewId?: string): string { return this.knowledge.propose(repositoryId, runId, input, gitViewId); }
   listCandidates(repositoryId: string, state = "pending"): CandidateRecord[] { return this.knowledge.listCandidates(repositoryId, state); }
@@ -63,20 +65,29 @@ export class BbDatabase {
 
   completeRun(repositoryId: string, input: FinishRunRecord & { proposals: CandidateProposal[]; proposalGitViewId?: string }): string[] {
     if (!this.runs.belongsToRepository(input.runId, repositoryId) || !this.runs.isRunning(input.runId)) throw new Error(`Running run ${input.runId} was not found in this repository`);
+    const requestIntent = input.requestIntent as RequestIntentDecision;
+    const requestProposal = requestIntent.disposition === "durable" ? this.knowledge.validateProposal(repositoryId, requestIntent.proposal) : undefined;
+    if (requestProposal && requestProposal.operation !== "create" && requestProposal.operation !== "reclassify") {
+      invariant(this.knowledge.getStatement(requestProposal.targetStatementId, repositoryId).kind === "intent", "requestIntent lifecycle proposals must target an intent", "invalid_request_intent");
+    }
     const proposals = input.proposals.map((proposal) => this.knowledge.validateProposal(repositoryId, proposal));
+    if (requestProposal) {
+      const encoded = JSON.stringify(requestProposal);
+      invariant(!proposals.some((proposal) => JSON.stringify(proposal) === encoded), "Do not repeat the requestIntent proposal in proposals", "duplicate_request_intent");
+    }
     const noDurableLearningReason = input.noDurableLearningReason?.trim();
     const hasLearningDecision = proposals.length > 0 || this.knowledge.hasCandidatesForRun(input.runId) || Boolean(noDurableLearningReason);
-    invariant(!this.runs.hasConsequentialEvents(input.runId) || hasLearningDecision, `Consequential run ${input.runId} must include a proposal or noDurableLearningReason explaining why no durable project knowledge was learned`, "missing_learning_decision");
+    invariant(!this.runs.hasToolEvents(input.runId) || hasLearningDecision, `Tool-assisted run ${input.runId} must include a proposal or noDurableLearningReason explaining why no durable project knowledge was learned`, "missing_learning_decision");
     return this.connection.transaction(() => {
-      const candidateIds = proposals.map((proposal) => this.knowledge.propose(repositoryId, input.runId, proposal, input.proposalGitViewId ?? input.endGitViewId));
+      const candidateIds = [...(requestProposal ? [requestProposal] : []), ...proposals].map((proposal) => this.knowledge.propose(repositoryId, input.runId, proposal, input.proposalGitViewId ?? input.endGitViewId));
       this.runs.finish({ ...input, ...(noDurableLearningReason ? { noDurableLearningReason } : {}) });
       return candidateIds;
     });
   }
 
-  searchLexical(repositoryId: string, query: string, limit = 40): Array<{ statement: CurrentStatement; rank: number }> {
-    const ids = this.search.lexicalStatementIds(repositoryId, query, limit);
-    return ids.map((id, index) => ({ statement: this.knowledge.getStatement(id, repositoryId), rank: index + 1 }));
+  searchLexical(repositoryId: string, query: string, limit = 40): Array<{ statement: CurrentStatement; rank: number; score: number }> {
+    const matches = this.search.lexicalMatches(repositoryId, query, limit);
+    return matches.map((match, index) => ({ statement: this.knowledge.getStatement(match.statementId, repositoryId), rank: index + 1, score: match.score }));
   }
 
   logRetrieval(input: { repositoryId: string; runId?: string; gitViewId: string; query: string; paths: string[]; providerStatus: unknown; renderedTokenCount: number; items: ContextItem[] }): string { return this.search.logRetrieval(input); }

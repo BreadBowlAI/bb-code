@@ -2,7 +2,7 @@ import type { ContextResult } from "../../domain/context.js";
 import type { SemanticHit, SemanticRetrievalProvider } from "../../ports/semantic-retrieval.js";
 import type { BbDatabase } from "../../infrastructure/sqlite/bb-database.js";
 import type { GitSnapshot } from "../../infrastructure/git/git-client.js";
-import { rankContext } from "./rank-context.js";
+import { rankContext, selectRelevantSemanticHits } from "./rank-context.js";
 import { renderContextResult } from "./render-context.js";
 import { resolveApplicability } from "./resolve-applicability.js";
 import { buildSemanticQuery } from "./build-query.js";
@@ -19,7 +19,7 @@ export async function retrieveContext(input: {
   semantic?: SemanticRetrievalProvider;
 }): Promise<ContextResult> {
   const paths = input.paths ?? [];
-  const lexicalQuery = [input.query, ...paths].join(" ");
+  const lexicalQuery = [...paths, input.query].join(" ");
   const lexical = input.database.searchLexical(input.repositoryId, lexicalQuery, 40);
   const semanticQuery = buildSemanticQuery(input.query, paths);
   let semantic: SemanticHit[] = [];
@@ -27,7 +27,11 @@ export async function retrieveContext(input: {
   if (input.semantic && !semanticQuery) providerStatus.semantic = "abstained";
   if (input.semantic && semanticQuery) {
     try {
-      semantic = await input.semantic.search({ query: semanticQuery, topK: 40, candidateK: 100, signal: AbortSignal.timeout(1_200) });
+      const rawSemantic = await input.semantic.search({ query: semanticQuery, topK: 40, candidateK: 100, signal: AbortSignal.timeout(1_200) });
+      semantic = selectRelevantSemanticHits(rawSemantic);
+      providerStatus.semanticCandidates = rawSemantic.length;
+      providerStatus.semanticSelected = semantic.length;
+      if (rawSemantic.length > 0 && semantic.length === 0) providerStatus.semantic = "abstained";
     } catch (error) {
       providerStatus.semantic = "degraded";
       providerStatus.semanticError = error instanceof Error ? error.message : String(error);

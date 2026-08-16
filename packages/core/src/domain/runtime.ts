@@ -17,12 +17,34 @@ export const ContextEffectSchema = z.object({
 });
 export type ContextEffect = z.infer<typeof ContextEffectSchema>;
 
+export const RequestIntentDecisionSchema = z.discriminatedUnion("disposition", [
+  z.object({
+    disposition: z.literal("ephemeral"),
+    reason: z.string().trim().min(1).describe("Why this request is conversational, operational, or fully represented by existing durable context.")
+  }),
+  z.object({
+    disposition: z.literal("durable"),
+    proposal: CandidateProposalSchema.describe("An intent create, revise, satisfy, abandon, supersede, or reclassify proposal for human review.")
+  })
+]).superRefine((decision, context) => {
+  if (decision.disposition !== "durable") return;
+  const proposal = decision.proposal;
+  const isIntentCreate = proposal.operation === "create" && proposal.kind === "intent";
+  const isIntentReclassification = proposal.operation === "reclassify" && proposal.kind === "intent";
+  const isIntentLifecycle = ["revise", "satisfy", "abandon", "supersede"].includes(proposal.operation) && (proposal.kind === undefined || proposal.kind === "intent");
+  if (!isIntentCreate && !isIntentReclassification && !isIntentLifecycle) {
+    context.addIssue({ code: "custom", message: "A durable requestIntent must propose an intent create or lifecycle transition", path: ["proposal"] });
+  }
+});
+export type RequestIntentDecision = z.infer<typeof RequestIntentDecisionSchema>;
+
 export const FinishRunInputSchema = z.object({
   runId: z.string().min(1),
   outcome: z.enum(["completed", "partial", "blocked", "failed"]),
   summary: z.string().min(1),
   verification: z.array(VerificationSchema).default([]),
   contextEffects: z.array(ContextEffectSchema).default([]),
+  requestIntent: RequestIntentDecisionSchema,
   proposals: z.array(CandidateProposalSchema).default([]),
   noDurableLearningReason: z.string().trim().min(1).optional()
 });
@@ -30,7 +52,7 @@ export type FinishRunInput = z.infer<typeof FinishRunInputSchema>;
 
 export const RuntimeEventSchema = z.object({
   schemaVersion: z.literal(1),
-  host: z.enum(["codex", "claude"]),
+  host: z.enum(["codex", "claude", "cursor"]),
   event: z.enum(["session_start", "start_run", "before_tool", "after_tool", "finish_run", "session_end"]),
   externalSessionId: z.string().min(1),
   externalTurnId: z.string().min(1).optional(),

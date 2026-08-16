@@ -18,4 +18,6 @@ Migration v3 makes external tool-event identity phase-aware: one `before_tool` a
 
 Migration v4 removes the accidental `supports` link when the same evidence already `defines` the same revision. Candidate acceptance preserves one relationship per evidence/revision pair, while distinct run evidence remains linked separately.
 
+Migration v5 records each finished run's structured request-intent disposition and retains provider lexical and semantic scores beside fused ranks. It also rebuilds local FTS documents from statement identity, current body, and scope only, removing generic attribute prose that caused low-information matches.
+
 SQLite uses WAL, foreign keys, normal synchronous mode, and a five-second busy timeout. IDs are ULIDs with readable prefixes such as `repo_`, `run_`, `bel_`, and `com_`.

@@ -6,6 +6,7 @@ import { retrieveContext } from "./retrieve-context.js";
 export async function getContext(input: { cwd: string; request: string; paths?: string[]; maxItems?: number; runId?: string; databasePath?: string; semantic?: SemanticRetrievalProvider }): Promise<ContextResult> {
   const workspace = await openWorkspace(input.cwd, input.databasePath ? { databasePath: input.databasePath } : {});
   try {
+    const runId = input.runId ?? workspace.database.latestRunningRunForRequest(workspace.repositoryId, workspace.worktreeId, input.request);
     return await retrieveContext({
       database: workspace.database,
       repositoryId: workspace.repositoryId,
@@ -14,7 +15,7 @@ export async function getContext(input: { cwd: string; request: string; paths?: 
       query: input.request,
       ...(input.paths ? { paths: input.paths } : {}),
       ...(input.maxItems ? { maxItems: input.maxItems } : {}),
-      ...(input.runId ? { runId: input.runId } : {}),
+      ...(runId ? { runId } : {}),
       ...(input.semantic ? { semantic: input.semantic } : {})
     });
   } finally { workspace.database.close(); }

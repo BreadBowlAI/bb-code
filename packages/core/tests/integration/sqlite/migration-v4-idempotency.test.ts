@@ -9,7 +9,7 @@ describe("migration v4 idempotency", () => {
     fixture.database.close();
     try {
       const reopened = new BbDatabase(filename);
-      try { expect(reopened.health()).toMatchObject({ schemaVersion: 4, journalMode: "wal", foreignKeys: true }); }
+      try { expect(reopened.health()).toMatchObject({ schemaVersion: 5, journalMode: "wal", foreignKeys: true }); }
       finally { reopened.close(); }
     } finally { fixture.dispose(); }
   });

@@ -8,7 +8,7 @@ describe("consequential run learning decision", () => {
       const sessionId = fixture.database.startSession({ repositoryId: fixture.repositoryId, worktreeId: fixture.worktreeId, host: "codex", externalSessionId: "learning-decision" });
       const runId = fixture.database.startRun({ sessionId, prompt: "Implement a feature", gitViewId: fixture.gitViewId });
       fixture.database.addRunEvent(runId, { kind: "after_tool", toolName: "apply_patch", paths: ["src/feature.ts"], consequential: true });
-      const completion = { runId, outcome: "completed", summary: "Implemented the feature", verification: [], effects: [], endGitViewId: fixture.gitViewId, proposals: [] };
+      const completion = { runId, outcome: "completed", summary: "Implemented the feature", verification: [], effects: [], requestIntent: { disposition: "ephemeral" as const, reason: "The test request is scoped to this run" }, endGitViewId: fixture.gitViewId, proposals: [] };
 
       expect(() => fixture.database.completeRun(fixture.repositoryId, completion)).toThrow(/noDurableLearningReason/);
       expect(() => fixture.database.completeRun(fixture.repositoryId, { ...completion, noDurableLearningReason: "The change only applied an already reviewed commitment and introduced no reusable project fact." })).not.toThrow();

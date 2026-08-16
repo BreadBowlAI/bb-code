@@ -57,6 +57,7 @@ describe("cross-agent MVP release flow", () => {
         summary: "Kept SQLite as the source of truth",
         verification: [{ kind: "test", result: "passed", summary: "Storage tests passed" }],
         contextEffects: [{ statementId: commitment.id, effect: "avoided_violation", note: "Prevented remote authority" }],
+        requestIntent: { disposition: "ephemeral", reason: "The storage change is complete and does not remain an active outcome" },
         proposals: [{
           operation: "create",
           kind: "belief",

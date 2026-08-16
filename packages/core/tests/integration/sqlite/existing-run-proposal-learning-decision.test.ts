@@ -19,7 +19,7 @@ describe("existing run proposal learning decision", () => {
         evidenceNotes: []
       }, fixture.gitViewId);
 
-      expect(() => fixture.database.completeRun(fixture.repositoryId, { runId, outcome: "completed", summary: "Implemented storage", verification: [], effects: [], endGitViewId: fixture.gitViewId, proposals: [] })).not.toThrow();
+      expect(() => fixture.database.completeRun(fixture.repositoryId, { runId, outcome: "completed", summary: "Implemented storage", verification: [], effects: [], requestIntent: { disposition: "ephemeral", reason: "The test request is scoped to this run" }, endGitViewId: fixture.gitViewId, proposals: [] })).not.toThrow();
     } finally { fixture.dispose(); }
   });
 });

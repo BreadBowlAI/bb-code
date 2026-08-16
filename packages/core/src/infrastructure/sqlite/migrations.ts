@@ -73,10 +73,26 @@ const VERSION_4 = `
   INSERT INTO schema_migrations(version, applied_at) VALUES(4, datetime('now'));
 `;
 
+const VERSION_5 = `
+  ALTER TABLE runs ADD COLUMN request_intent_json TEXT;
+  ALTER TABLE retrieval_items ADD COLUMN lexical_score REAL;
+  ALTER TABLE retrieval_items ADD COLUMN semantic_score REAL;
+  DELETE FROM statement_fts;
+  DELETE FROM statement_search_documents;
+  INSERT INTO statement_search_documents(statement_id,revision_id,searchable_text,updated_at)
+    SELECT s.id,r.id,s.id || ' ' || r.body || ' ' || CASE WHEN r.scope_kind='path' THEN r.scope_path ELSE 'repository' END,datetime('now')
+    FROM statements s JOIN statement_revisions r ON r.id=s.current_revision_id
+    WHERE r.status IN ('active','accepted');
+  INSERT INTO statement_fts(statement_id,revision_id,searchable_text)
+    SELECT statement_id,revision_id,searchable_text FROM statement_search_documents;
+  INSERT INTO schema_migrations(version, applied_at) VALUES(5, datetime('now'));
+`;
+
 const MIGRATIONS = [
   { version: 2, sql: VERSION_2 },
   { version: 3, sql: VERSION_3 },
-  { version: 4, sql: VERSION_4 }
+  { version: 4, sql: VERSION_4 },
+  { version: 5, sql: VERSION_5 }
 ] as const;
 
 export function migrate(database: DatabaseSync): void {

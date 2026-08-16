@@ -5,6 +5,8 @@ export type ContextItem = CurrentStatement & {
   finalScore: number;
   lexicalRank?: number;
   semanticRank?: number;
+  lexicalScore?: number;
+  semanticScore?: number;
   freshness: "fresh" | "stale" | "unknown";
   applicabilityReason: string;
   conflict?: boolean;

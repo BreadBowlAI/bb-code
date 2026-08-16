@@ -58,7 +58,7 @@ export function statusesFor(kind: StatementKind): readonly StatementStatus[] {
   return CommitmentStatusSchema.options;
 }
 
-export const CandidateOperationSchema = z.enum(["create", "revise", "confirm", "contradict", "satisfy", "supersede", "retire"]);
+export const CandidateOperationSchema = z.enum(["create", "revise", "confirm", "contradict", "satisfy", "abandon", "supersede", "retire", "reclassify"]);
 export type CandidateOperation = z.infer<typeof CandidateOperationSchema>;
 
 const CandidateEvidenceFields = {
@@ -75,8 +75,9 @@ const CreateCandidateProposalSchema = z.discriminatedUnion("kind", [
     body: z.string().min(1),
     scope: ScopeSchema,
     attributes: IntentAttributesSchema,
+    initialStatus: z.enum(["active", "satisfied", "abandoned"]).default("active").describe("The reviewed intent's initial lifecycle state. Use satisfied or abandoned when a request ends in the same run that discovered it."),
     ...CandidateEvidenceFields
-  }).describe("Create an intent. attributes must contain owner, priority, and successConditions."),
+  }).describe("Create an intent. attributes must contain owner, priority, and successConditions; initialStatus records whether the outcome remains active."),
   z.object({
     operation: z.literal("create"),
     kind: z.literal("belief"),
@@ -97,8 +98,39 @@ const CreateCandidateProposalSchema = z.discriminatedUnion("kind", [
   }).describe("Create a commitment. attributes must contain rationale and authority; agent authority never substitutes for human authority.")
 ]);
 
+const ReclassifyCandidateProposalSchema = z.discriminatedUnion("kind", [
+  z.object({
+    operation: z.literal("reclassify"),
+    kind: z.literal("intent"),
+    targetStatementId: z.string().min(1),
+    body: z.string().min(1).optional(),
+    scope: ScopeSchema.optional(),
+    attributes: IntentAttributesSchema,
+    initialStatus: z.enum(["active", "satisfied", "abandoned"]).default("active"),
+    ...CandidateEvidenceFields
+  }),
+  z.object({
+    operation: z.literal("reclassify"),
+    kind: z.literal("belief"),
+    targetStatementId: z.string().min(1),
+    body: z.string().min(1).optional(),
+    scope: ScopeSchema.optional(),
+    attributes: BeliefAttributesSchema,
+    ...CandidateEvidenceFields
+  }),
+  z.object({
+    operation: z.literal("reclassify"),
+    kind: z.literal("commitment"),
+    targetStatementId: z.string().min(1),
+    body: z.string().min(1).optional(),
+    scope: ScopeSchema.optional(),
+    attributes: CommitmentAttributesSchema,
+    ...CandidateEvidenceFields
+  })
+]).describe("Atomically supersede an incorrectly classified statement and create its reviewed replacement with a new identity.");
+
 const ExistingStatementCandidateProposalSchema = z.object({
-  operation: z.enum(["revise", "confirm", "contradict", "satisfy", "supersede", "retire"]),
+  operation: z.enum(["revise", "confirm", "contradict", "satisfy", "abandon", "supersede", "retire"]),
   kind: StatementKindSchema.optional(),
   targetStatementId: z.string().min(1).describe("Existing bb-code statement ID. Call bb_explain first when its kind or current attributes are uncertain."),
   body: z.string().min(1).optional(),
@@ -113,7 +145,8 @@ const ExistingStatementCandidateProposalSchema = z.object({
 
 export const CandidateProposalSchema = z.discriminatedUnion("operation", [
   CreateCandidateProposalSchema,
-  ExistingStatementCandidateProposalSchema
+  ExistingStatementCandidateProposalSchema,
+  ReclassifyCandidateProposalSchema
 ]).describe("Human-reviewable durable knowledge proposal. For create, choose the kind first and use exactly that kind's attributes shape.");
 export type CandidateProposal = z.infer<typeof CandidateProposalSchema>;
 

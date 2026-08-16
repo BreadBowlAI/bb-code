@@ -6,6 +6,7 @@ bb-code has one core rule: host integrations depend on the runtime, while the ru
 flowchart LR
   Codex["Codex hooks + MCP"] --> CLI["CLI composition root"]
   Claude["Claude Code hooks + MCP"] --> CLI
+  Cursor["Cursor hooks + MCP + rule"] --> CLI
   Human["Human CLI"] --> CLI
 
   CLI --> Application["Application use cases"]
@@ -18,7 +19,7 @@ flowchart LR
   QKV -. implements .-> Ports
 ```
 
-The arrows point inward toward policy. Domain code has no knowledge of SQLite, Git, MCP, Codex, Claude Code, or QKV.
+The arrows point inward toward policy. Domain code has no knowledge of SQLite, Git, MCP, Codex, Claude Code, Cursor, or QKV.
 
 ## Layers
 
@@ -78,7 +79,7 @@ Location: `apps/cli/src`
 The executable package connects the layers:
 
 - `commands` contains human-facing command groups.
-- `adapters` translates Codex and Claude payloads into `RuntimeEvent`.
+- `adapters` translates Codex, Claude, and Cursor payloads into `RuntimeEvent`.
 - `mcp` exposes exactly four tools.
 - `composition` selects optional implementations such as QKV.
 - `cli.ts` only assembles commands; `launcher.ts` handles process startup.
@@ -89,7 +90,7 @@ Host-native payloads stop at `normalize-hook-event.ts`. The normalized payload i
 
 ```mermaid
 sequenceDiagram
-  participant Host as Codex or Claude Code
+  participant Host as Codex, Claude Code, or Cursor
   participant Adapter as Host adapter
   participant App as Application layer
   participant DB as SQLite

@@ -1,6 +1,6 @@
 # bb-code
 
-bb-code is the continuity layer for software engineering agents. It gives Codex and Claude Code the same durable project context without replacing either agent, parsing private transcripts, or letting an agent silently rewrite the project's memory.
+bb-code is the continuity layer for software engineering agents. It gives Codex, Claude Code, and Cursor the same durable project context without replacing any agent, parsing private transcripts, or letting an agent silently rewrite the project's memory.
 
 The MVP stores three deliberately ordinary concepts:
 
@@ -15,13 +15,13 @@ Statements are immutable revisions backed by evidence. Agent-authored changes en
 Coding agents are already good at editing code. What disappears between requests and sessions is the reasoning that should constrain the next run: why an API must stay compatible, which assumption is uncertain, or what success means. bb-code sits beside the coding agent as a standalone local runtime:
 
 ```text
-Codex / Claude Code
+Codex / Claude Code / Cursor
   lifecycle hooks ──> host adapter ──> bb-code core ──> SQLite + FTS5
   MCP tools <──────────────────────────────┘              │
                                                           └─> optional QKV
 ```
 
-Hooks provide reliable run timing. MCP gives the agent four explicit operations. The core imports no host-specific or QKV code, so OpenCode and other adapters can be added without changing the domain.
+Hooks provide reliable run timing. MCP gives the agent four explicit operations. Cursor's project rule asks the agent to retrieve bb-code context before work because Cursor's pre-prompt hook starts the run but does not expose a documented context-injection response. The core imports no host-specific or QKV code, so OpenCode and other adapters can be added without changing the domain.
 
 ## Quick start
 
@@ -35,19 +35,19 @@ npm link
 
 cd your-project
 bb init
-bb integrate codex
+bb integrate cursor
 bb status
 bb context "add OAuth login"
 ```
 
-Install `plugins/bb-code` through the included Codex marketplace, or add `.claude-plugin/marketplace.json` to Claude Code and install its plugin. Both expect the `bb` executable on `PATH`.
+Install `plugins/bb-code` through the included Codex marketplace, add `.claude-plugin/marketplace.json` to Claude Code and install its plugin, or run `bb integrate cursor` to merge project-scoped Cursor hooks, MCP configuration, and an always-applied rule. All integrations expect the `bb` executable on `PATH`.
 
 ## The four agent tools
 
 - `bb_context` retrieves applicable context for a request and returns the active run ID when hooks started the run.
 - `bb_explain` returns one statement's typed current revision.
 - `bb_propose_update` queues one proposed learning for human review.
-- `bb_finish_run` records the outcome, verification, context effects, and proposals. After consequential work with no proposals anywhere in the run, it requires an explicit `noDurableLearningReason` instead of silently treating an empty list as a learning decision.
+- `bb_finish_run` records the outcome, verification, context effects, an explicit request-intent decision, and proposals. A durable request becomes a reviewed intent proposal; conversational or operational work records why it is ephemeral. After any tool-assisted work with no learning proposals, it requires an explicit `noDurableLearningReason`.
 
 There is intentionally no `accept` MCP tool.
 
@@ -57,10 +57,12 @@ There is intentionally no `accept` MCP tool.
 
 ```text
 bb init
-bb integrate codex|claude
+bb integrate codex|claude|cursor
 bb doctor
 bb add intent|belief|commitment
 bb status
+bb audit [--json]
+bb reclassify <statement-id> <intent|belief|commitment>
 bb context "<request>" [--path <path>] [--json]
 bb explain <statement-id> [--json]
 bb review [candidate-id] [--accept|--edit|--reject|--defer|--explain]
@@ -69,7 +71,7 @@ bb sync [--force]
 bb mcp serve
 ```
 
-`bb add commitment` always asks for explicit confirmation unless `--yes` is supplied by the human running the command.
+`bb add commitment` always asks for explicit confirmation unless `--yes` is supplied by the human running the command. `bb review --edit` can correct a proposed kind, scope, and kind-specific attributes before acceptance. `bb reclassify` queues an atomic repair that supersedes the old typed identity and creates a reviewed replacement without rewriting history. `bb audit` reports statement balance, lifecycle use, request-intent decisions, retrieval volume, and consequential context effects.
 
 ## Local and proprietary boundaries
 

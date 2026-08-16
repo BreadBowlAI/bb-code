@@ -31,19 +31,23 @@ def validate_skill(path: Path) -> None:
 def main() -> None:
     codex = ROOT / "plugins" / "bb-code"
     claude = ROOT / "plugins" / "claude" / "bb-code"
+    cursor = ROOT / "plugins" / "cursor" / "bb-code"
     codex_manifest = load_json(codex / ".codex-plugin" / "plugin.json")
     claude_manifest = load_json(claude / ".claude-plugin" / "plugin.json")
-    if codex_manifest.get("name") != "bb-code" or claude_manifest.get("name") != "bb-code":
+    cursor_manifest = load_json(cursor / ".cursor-plugin" / "plugin.json")
+    if codex_manifest.get("name") != "bb-code" or claude_manifest.get("name") != "bb-code" or cursor_manifest.get("name") != "bb-code":
         raise ValueError("plugin names must be bb-code")
     load_json(codex / ".mcp.json")
     load_json(codex / "hooks" / "hooks.json")
     load_json(claude / ".mcp.json")
     load_json(claude / "hooks" / "hooks.json")
+    load_json(cursor / "mcp.json")
+    load_json(cursor / "hooks" / "hooks.json")
     load_json(ROOT / ".agents" / "plugins" / "marketplace.json")
     load_json(ROOT / ".claude-plugin" / "marketplace.json")
     validate_skill(codex / "skills" / "bootstrap-project" / "SKILL.md")
     validate_skill(claude / "skills" / "bootstrap-project" / "SKILL.md")
-    print("Codex and Claude plugins are valid.")
+    print("Codex, Claude, and Cursor plugins are valid.")
 
 
 if __name__ == "__main__":

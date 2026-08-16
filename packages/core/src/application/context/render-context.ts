@@ -18,7 +18,7 @@ export function renderContextResult(items: ContextItem[], runId?: string): { ren
   const footer = runId ? [
     "",
     finishRunGuidance(runId),
-    "Proposal attributes: intent={owner:{kind,id},priority,successConditions}; belief={confidence}; commitment={rationale,authority:{kind,id},revisitCondition?}. Actor kind is human, agent, or repository_document and id is always required."
+    "Proposal attributes: intent={owner:{kind,id},priority,successConditions}+initialStatus; belief={confidence}; commitment={rationale,authority:{kind,id},revisitCondition?}. Actor kind is human, agent, or repository_document and id is always required."
   ] : [];
   const selected: ContextItem[] = [];
   const conflicts: string[] = [];

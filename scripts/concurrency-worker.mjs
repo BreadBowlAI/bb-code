@@ -7,7 +7,15 @@ try {
     const sessionId = database.startSession({ repositoryId, worktreeId, host, externalSessionId: `${host}-${index}` });
     const runId = database.startRun({ sessionId, externalTurnId: `turn-${index}`, prompt: "Concurrent request", gitViewId });
     database.addRunEvent(runId, { kind: "after_tool", externalEventId: `tool-${index}`, toolName: "Read", consequential: false });
-    database.finishRun({ runId, outcome: "completed", summary: "Concurrent completion", verification: [], effects: [], endGitViewId: gitViewId });
+    database.finishRun({
+      runId,
+      outcome: "completed",
+      summary: "Concurrent completion",
+      verification: [],
+      effects: [],
+      requestIntent: { disposition: "ephemeral", reason: "Concurrency smoke run only" },
+      endGitViewId: gitViewId
+    });
   }
 } finally {
   database.close();
