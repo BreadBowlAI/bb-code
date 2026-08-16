@@ -37,7 +37,7 @@ pnpm test:performance
 
 `pnpm typecheck` checks production and test TypeScript. The default test command finds tests only under explicit `tests` directories, preventing production files from becoming accidental test containers.
 
-The acceptance command exercises the cross-agent Codex → pending proposal → human review → Claude retrieval flow and composes the branch visibility, changed-blob freshness, semantic fallback, token-budget, and four-tool contract scenarios into one release gate.
+The acceptance command exercises the default-standard Codex → auto-accepted belief → Claude retrieval flow and composes the branch visibility, changed-blob freshness, semantic fallback, token-budget, and four-tool contract scenarios into one release gate. Focused policy tests separately prove strict review, standard commitment protection, yolo acceptance, and automatic-resolution provenance.
 
 Focused learning-loop tests cover completed request intents, read-only diagnostic decisions, quiet-run Stop nudges, review-time kind correction, and atomic statement reclassification. Retrieval hard negatives must include real dogfood failures: generic word overlap must abstain, and a flat semantic score distribution must not inject arbitrary context.
 

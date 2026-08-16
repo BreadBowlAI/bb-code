@@ -9,7 +9,7 @@ import { createGitFixture } from "../../support/git-fixture.js";
 const owner: ActorRef = { kind: "human", id: "mvp-owner" };
 
 describe("cross-agent MVP release flow", () => {
-  it("carries reviewed context from Codex proposal through human review into Claude retrieval", async () => {
+  it("carries a standard-mode belief from Codex into Claude retrieval without a review stop", async () => {
     const fixture = createGitFixture();
     const databasePath = join(fixture.directory, "bb.db");
     try {
@@ -71,10 +71,9 @@ describe("cross-agent MVP release flow", () => {
       }, databasePath);
 
       const review = await openWorkspace(fixture.root, { databasePath });
-      const [candidate] = review.database.listCandidates(review.repositoryId);
+      const [candidate] = review.database.listCandidates(review.repositoryId, "auto_accepted");
       expect(candidate?.proposal.body).toBe("Storage state is persisted in SQLite");
-      expect(review.database.searchLexical(review.repositoryId, "persisted SQLite")).toEqual([]);
-      review.database.resolveCandidate(candidate!.id, "accept", owner);
+      expect(review.database.searchLexical(review.repositoryId, "persisted SQLite")[0]?.statement.body).toBe("Storage state is persisted in SQLite");
       review.database.close();
 
       const claude = await processRuntimeEvent({

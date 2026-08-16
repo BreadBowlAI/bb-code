@@ -6,8 +6,8 @@ import { blobSha } from "../../../src/infrastructure/git/git-client.js";
 import { createGitFixture } from "../../support/git-fixture.js";
 import { owner } from "../../support/statements.js";
 
-describe("rebase re-anchor review", () => {
-  it("queues one confirm candidate for an unambiguous patch match without remapping the belief", async () => {
+describe("rebase re-anchor policy", () => {
+  it("automatically confirms an unambiguous belief patch match in standard mode without remapping it", async () => {
     const git = createGitFixture();
     const databasePath = join(git.directory, "bb.db");
     try {
@@ -38,11 +38,14 @@ describe("rebase re-anchor review", () => {
 
       const current = await openWorkspace(git.root, { databasePath });
       await retrieveContext({ database: current.database, repositoryId: current.repositoryId, gitViewId: current.gitViewId, git: current.git, query: "rebased feature module", paths: ["src/rebased.ts"] });
-      const candidates = current.database.listCandidates(current.repositoryId);
+      const candidates = current.database.listCandidates(current.repositoryId, "auto_accepted");
       expect(candidates).toHaveLength(1);
       expect(candidates[0]).toMatchObject({ proposal: { operation: "confirm", targetStatementId: belief.id } });
       expect(candidates[0]!.proposal.rationale).toContain(originalCommit);
-      expect(current.database.statementAnchors(belief.id)[0]?.headCommitSha).toBe(originalCommit);
+      const anchors = current.database.statementAnchors(belief.id).map((anchor) => anchor.headCommitSha);
+      expect(anchors).toContain(originalCommit);
+      expect(anchors).toContain(current.git.headCommitSha);
+      expect(current.database.getStatement(belief.id)).toMatchObject({ id: belief.id, revisionNumber: 1 });
       current.database.close();
     } finally {
       git.dispose();

@@ -9,6 +9,7 @@ describe("migration v4 evidence cleanup", () => {
     const fixture = createSqliteFixture();
     let reopened: BbDatabase | undefined;
     try {
+      fixture.database.setKnowledgeMode(fixture.repositoryId, "strict", owner);
       const candidateId = fixture.database.propose(fixture.repositoryId, undefined, {
         operation: "create",
         kind: "belief",

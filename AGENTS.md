@@ -9,7 +9,7 @@
 - Keep SQL inside `packages/core/src/infrastructure/sqlite`.
 - Put tests under a package's `tests/unit` or `tests/integration` directory, with one behavior per test file.
 - Translate native hook payloads at adapter boundaries.
-- Never accept agent-proposed durable knowledge without human review.
+- Apply the repository knowledge mode centrally and preserve automatic-resolution provenance: `strict` reviews every proposal, `standard` automatically accepts intent/belief-only changes, and `yolo` automatically accepts every proposal. Never bypass commitment review outside explicit `yolo` mode.
 - Never parse host transcript files or send code and tool output to QKV.
 - Keep QKV behind the public provider boundary described in
   `docs/QKV_COMPETITIVE_EDGE.md`; do not move authority or source-of-truth data

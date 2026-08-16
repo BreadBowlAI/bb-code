@@ -187,7 +187,7 @@ The decisive bb-code metrics are downstream:
 - irrelevant context rate and user rejection rate.
 
 `bb_finish_run` context effects provide a first measurement channel, but they
-are agent reports rather than ground truth. Combine them with human review,
+are agent reports rather than ground truth. Combine them with repository policy, human review,
 controlled fixtures, and inspectable retrieval logs.
 
 ## Open-core rule

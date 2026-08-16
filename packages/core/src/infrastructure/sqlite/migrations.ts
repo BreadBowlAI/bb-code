@@ -88,11 +88,23 @@ const VERSION_5 = `
   INSERT INTO schema_migrations(version, applied_at) VALUES(5, datetime('now'));
 `;
 
+const VERSION_6 = `
+  ALTER TABLE repositories ADD COLUMN knowledge_mode TEXT NOT NULL DEFAULT 'standard' CHECK(knowledge_mode IN ('strict','standard','yolo'));
+  ALTER TABLE repositories ADD COLUMN knowledge_mode_updated_at TEXT;
+  ALTER TABLE repositories ADD COLUMN knowledge_mode_updated_by_json TEXT;
+  UPDATE repositories
+    SET knowledge_mode_updated_at=datetime('now'),
+        knowledge_mode_updated_by_json='{"kind":"repository_document","id":"docs/PRODUCT_DECISIONS.md","label":"bb-code default policy"}'
+    WHERE knowledge_mode_updated_at IS NULL;
+  INSERT INTO schema_migrations(version, applied_at) VALUES(6, datetime('now'));
+`;
+
 const MIGRATIONS = [
   { version: 2, sql: VERSION_2 },
   { version: 3, sql: VERSION_3 },
   { version: 4, sql: VERSION_4 },
-  { version: 5, sql: VERSION_5 }
+  { version: 5, sql: VERSION_5 },
+  { version: 6, sql: VERSION_6 }
 ] as const;
 
 export function migrate(database: DatabaseSync): void {

@@ -4,7 +4,7 @@ import { openWorkspace } from "@breadbowl/bb-core";
 import { configuredQkvClient, resolveQkvConfiguration, writeQkvConfiguration } from "../composition/qkv-config.js";
 import { print } from "./io.js";
 
-const DISCLOSURE = "QKV will process reviewed current statements and a bounded secret-filtered term/path projection of active request queries. Source code, diffs, stored/raw prompts, tool input/output, transcripts, environment values, and secrets are never indexed.";
+const DISCLOSURE = "QKV will process current statements activated by repository policy and a bounded secret-filtered term/path projection of active request queries. Source code, diffs, stored/raw prompts, tool input/output, transcripts, environment values, and secrets are never indexed.";
 
 async function confirmDisclosure(yes: boolean): Promise<void> {
   print(DISCLOSURE);
@@ -90,12 +90,12 @@ export function registerQkvCommands(program: Command): void {
     }, true);
   });
 
-  program.command("sync").description("Push pending reviewed statement documents to QKV").option("--force", "retry all failed jobs immediately and reset their attempt counters").action(async (options) => {
+  program.command("sync").description("Push pending policy-activated statement documents to QKV").option("--force", "retry all failed jobs immediately and reset their attempt counters").action(async (options) => {
     const workspace = await openWorkspace(process.cwd());
     const state = workspace.database.getProviderState(workspace.repositoryId, "qkv");
     const indexId = state?.remote_index_id;
     if (state?.status !== "enabled" || typeof indexId !== "string") throw new Error("QKV is not fully configured");
-    const configured = await configuredQkvClientForCli("synchronize reviewed statements");
+    const configured = await configuredQkvClientForCli("synchronize policy-activated statements");
     if (configured.deprecatedUrl) process.stderr.write("[bb-code] BB_QKV_URL is deprecated; use BB_QKV_API_URL.\n");
     const resetCount = options.force ? workspace.database.resetFailedRetrievalJobsForRetry(workspace.repositoryId, "qkv") : 0;
     const jobs = workspace.database.pendingRetrievalJobs(workspace.repositoryId);

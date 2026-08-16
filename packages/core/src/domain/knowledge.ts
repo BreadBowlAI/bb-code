@@ -3,6 +3,9 @@ import { z } from "zod";
 export const StatementKindSchema = z.enum(["intent", "belief", "commitment"]);
 export type StatementKind = z.infer<typeof StatementKindSchema>;
 
+export const KnowledgeModeSchema = z.enum(["strict", "standard", "yolo"]);
+export type KnowledgeMode = z.infer<typeof KnowledgeModeSchema>;
+
 export const ScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("repository") }),
   z.object({
@@ -147,8 +150,21 @@ export const CandidateProposalSchema = z.discriminatedUnion("operation", [
   CreateCandidateProposalSchema,
   ExistingStatementCandidateProposalSchema,
   ReclassifyCandidateProposalSchema
-]).describe("Human-reviewable durable knowledge proposal. For create, choose the kind first and use exactly that kind's attributes shape.");
+]).describe("Durable knowledge proposal resolved according to the repository knowledge mode. For create, choose the kind first and use exactly that kind's attributes shape.");
 export type CandidateProposal = z.infer<typeof CandidateProposalSchema>;
+
+export function proposalKinds(proposal: CandidateProposal, targetKind?: StatementKind): Set<StatementKind> {
+  if (proposal.operation === "create") return new Set([proposal.kind]);
+  if (proposal.operation === "reclassify") return new Set([proposal.kind, ...(targetKind ? [targetKind] : [])]);
+  return new Set([...(proposal.kind ? [proposal.kind] : []), ...(targetKind ? [targetKind] : [])]);
+}
+
+export function shouldAutoAcceptProposal(mode: KnowledgeMode, proposal: CandidateProposal, targetKind?: StatementKind): boolean {
+  if (mode === "strict") return false;
+  if (mode === "yolo") return true;
+  const kinds = proposalKinds(proposal, targetKind);
+  return kinds.size > 0 && !kinds.has("commitment");
+}
 
 export type CurrentStatement = {
   id: string;

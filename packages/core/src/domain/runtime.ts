@@ -24,7 +24,7 @@ export const RequestIntentDecisionSchema = z.discriminatedUnion("disposition", [
   }),
   z.object({
     disposition: z.literal("durable"),
-    proposal: CandidateProposalSchema.describe("An intent create, revise, satisfy, abandon, supersede, or reclassify proposal for human review.")
+    proposal: CandidateProposalSchema.describe("An intent create, revise, satisfy, abandon, supersede, or reclassify proposal resolved by repository knowledge mode.")
   })
 ]).superRefine((decision, context) => {
   if (decision.disposition !== "durable") return;

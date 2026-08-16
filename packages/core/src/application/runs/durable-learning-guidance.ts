@@ -10,5 +10,5 @@ Before creating a statement, compare the retrieved context. Prefer revise, satis
 export const CONTEXT_EFFECT_GUIDANCE = `For every retrieved statement that materially affected this run, include one contextEffects entry using its statement ID: changed_plan, caused_clarification, avoided_violation, or changed_verification. Use no_effect only when a retrieved statement was considered but did not affect the work. Do not fabricate effects for context that was not used.`;
 
 export function finishRunGuidance(runId: string): string {
-  return `Before ending, call bb_finish_run with runId ${runId}. Always include requestIntent. ${DURABLE_LEARNING_RUBRIC} ${CONTEXT_EFFECT_GUIDANCE} Submit useful proposals for human review; after any tool-assisted work, if there are none beyond requestIntent, provide a specific noDurableLearningReason.`;
+  return `Before ending, call bb_finish_run with runId ${runId}. Always include requestIntent. ${DURABLE_LEARNING_RUBRIC} ${CONTEXT_EFFECT_GUIDANCE} Submit useful proposals for resolution under the repository knowledge mode; after any tool-assisted work, if there are none beyond requestIntent, provide a specific noDurableLearningReason.`;
 }

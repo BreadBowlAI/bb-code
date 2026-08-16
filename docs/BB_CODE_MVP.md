@@ -137,10 +137,11 @@ status: accepted | superseded | retired
 provenance
 ```
 
-An agent must never silently create an accepted commitment. It may propose one
-through a candidate update, but `proposed` is not a commitment status.
-Acceptance requires explicit user approval, an approved design decision, a
-merged change with clear authority, or a future team policy.
+An agent never invokes commitment acceptance directly. It proposes one through
+a candidate update, and `proposed` is not a commitment status. Acceptance
+requires explicit user approval, an approved design decision, a merged change
+with clear authority, or an explicitly configured repository policy such as
+`yolo` mode.
 
 ### Evidence
 
@@ -177,7 +178,8 @@ These are product invariants, not optional implementation details:
 2. Every durable statement has scope.
 3. Accepted statements are revised or superseded, not silently overwritten.
 4. Agents may automatically propose beliefs.
-5. Agents may propose intents and commitments, but cannot accept them.
+5. Agents propose knowledge; configured repository policy, not the agent tool,
+   decides whether a candidate is accepted automatically or awaits review.
 6. Code and tests can change a belief; they cannot decide what the user wants.
 7. A newer request does not automatically replace a longer-lived intent.
 8. Accepted commitments do not decay merely because they are old.
@@ -294,9 +296,9 @@ bb_finish_run
 
 - `bb_context` returns relevant current statements for a request or path.
 - `bb_explain` hydrates a statement, its revisions, and its evidence.
-- `bb_propose_update` creates a candidate for review; it never silently accepts a commitment.
+- `bb_propose_update` creates a candidate; repository knowledge mode resolves it, and the agent has no direct acceptance control.
 - `bb_finish_run` records the run outcome, verification, context effects, and
-  zero or more final candidate updates. Its candidates also require review.
+  zero or more final candidate updates. Its candidates follow the same repository knowledge mode.
 
 `bb_finish_run` is the reliable end-of-run learning boundary. The active
 coding agent uses its existing reasoning to submit structured learning; bb-code

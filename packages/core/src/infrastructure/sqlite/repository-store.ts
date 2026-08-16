@@ -1,10 +1,14 @@
 import { createId } from "../../domain/ids.js";
+import { ActorRefSchema, KnowledgeModeSchema, type ActorRef, type KnowledgeMode } from "../../domain/knowledge.js";
 import type { GitView } from "../../domain/runtime.js";
 import { fromJson, now, toJson } from "./values.js";
 import type { SqliteConnection } from "./connection.js";
 
 export type RepositoryRegistration = { repositoryId: string; locationId: string; worktreeId: string; gitViewId: string };
 export type KnownWorktree = { gitCommonDir: string; gitDir: string; gitView: GitView };
+export type KnowledgePolicy = { mode: KnowledgeMode; updatedAt: string; updatedBy: ActorRef };
+
+const defaultPolicyActor: ActorRef = { kind: "repository_document", id: "docs/PRODUCT_DECISIONS.md", label: "bb-code default policy" };
 
 export class RepositoryStore {
   constructor(private readonly connection: SqliteConnection) {}
@@ -12,7 +16,7 @@ export class RepositoryStore {
   register(input: { repositoryId: string; root: string; gitCommonDir: string; gitDir: string; headCommitSha: string; headTreeSha: string; parentShas?: string[]; dirtyFingerprint: string; changedPaths?: string[]; stablePatchId?: string; branchLabel?: string }): RepositoryRegistration {
     const database = this.connection.database;
     const timestamp = now();
-    database.prepare("INSERT OR IGNORE INTO repositories VALUES(?, ?, 1)").run(input.repositoryId, timestamp);
+    database.prepare("INSERT OR IGNORE INTO repositories(id,created_at,schema_version,knowledge_mode,knowledge_mode_updated_at,knowledge_mode_updated_by_json) VALUES(?,?,1,'standard',?,?)").run(input.repositoryId, timestamp, timestamp, toJson(defaultPolicyActor));
     let location = database.prepare("SELECT id FROM repository_locations WHERE canonical_root=?").get(input.root) as { id: string } | undefined;
     if (!location) {
       location = { id: createId("loc") };
@@ -54,5 +58,24 @@ export class RepositoryStore {
     if (!row) return undefined;
     const gitView = this.getGitView(String(row.git_view_id));
     return gitView ? { gitCommonDir: String(row.git_common_dir), gitDir: String(row.git_dir), gitView } : undefined;
+  }
+
+  knowledgePolicy(repositoryId: string): KnowledgePolicy {
+    const row = this.connection.database.prepare("SELECT knowledge_mode,knowledge_mode_updated_at,knowledge_mode_updated_by_json FROM repositories WHERE id=?").get(repositoryId) as Record<string, unknown> | undefined;
+    if (!row) throw new Error(`Repository ${repositoryId} was not found`);
+    return {
+      mode: KnowledgeModeSchema.parse(row.knowledge_mode),
+      updatedAt: String(row.knowledge_mode_updated_at),
+      updatedBy: ActorRefSchema.parse(fromJson(row.knowledge_mode_updated_by_json))
+    };
+  }
+
+  setKnowledgeMode(repositoryId: string, mode: KnowledgeMode, actor: ActorRef): KnowledgePolicy {
+    const parsedMode = KnowledgeModeSchema.parse(mode);
+    const parsedActor = ActorRefSchema.parse(actor);
+    const timestamp = now();
+    const result = this.connection.database.prepare("UPDATE repositories SET knowledge_mode=?,knowledge_mode_updated_at=?,knowledge_mode_updated_by_json=? WHERE id=?").run(parsedMode, timestamp, toJson(parsedActor), repositoryId);
+    if (result.changes !== 1) throw new Error(`Repository ${repositoryId} was not found`);
+    return { mode: parsedMode, updatedAt: timestamp, updatedBy: parsedActor };
   }
 }

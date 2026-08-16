@@ -15,7 +15,7 @@ Choose the proposal kind before constructing attributes. Exact create shapes:
 - intent: attributes { owner: { kind: "human"|"agent"|"repository_document", id: string, label?: string }, priority: "low"|"normal"|"high", successConditions: string[] }, initialStatus: "active"|"satisfied"|"abandoned"
 - belief: attributes { confidence: number from 0 to 1 }
 - commitment: attributes { rationale: string, authority: { kind: "human"|"agent"|"repository_document", id: string, label?: string }, revisitCondition?: string }
-For a direct user statement, use an explicit human actor such as { kind: "human", id: "repository-owner" }; never invent human authority for an agent-derived decision. Use repository_document with the supporting path for explicit repository authority. For non-create operations, provide targetStatementId and call bb_explain first if the current kind or attributes are uncertain. Use reclassify only to repair an existing wrong kind; it supersedes the old identity and still requires human review.`;
+For a direct user statement, use an explicit human actor such as { kind: "human", id: "repository-owner" }; never invent human authority for an agent-derived decision. Use repository_document with the supporting path for explicit repository authority. For non-create operations, provide targetStatementId and call bb_explain first if the current kind or attributes are uncertain. Use reclassify only to repair an existing wrong kind; it supersedes the old identity through repository knowledge policy.`;
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({ name: "bb-code", version: "0.1.0" });
@@ -38,12 +38,12 @@ export function createMcpServer(): McpServer {
   });
   server.registerTool(MCP_TOOL_NAMES[2], {
     title: "Propose a durable update",
-    description: `Put a statement update into the human review queue. This never changes durable context directly. ${PROPOSAL_GUIDANCE}`,
+    description: `Record a statement update candidate. Repository knowledge mode may accept it automatically; the MCP caller has no acceptance control. ${PROPOSAL_GUIDANCE}`,
     inputSchema: { runId: z.string().min(1), proposal: CandidateProposalSchema }
   }, async ({ runId, proposal }) => result({ candidateId: await proposeUpdate(process.cwd(), runId, proposal) }));
   server.registerTool(MCP_TOOL_NAMES[3], {
     title: "Finish a bb-code run",
-    description: `Record the run outcome, verification, request-intent disposition, context effects, and pending proposals at the learning boundary. Any tool-assisted run with no non-request proposals must explain why it produced no durable learning. ${CONTEXT_EFFECT_GUIDANCE} ${PROPOSAL_GUIDANCE}`,
+    description: `Record the run outcome, verification, request-intent disposition, context effects, and knowledge proposals at the learning boundary. Repository policy resolves each proposal. Any tool-assisted run with no non-request proposals must explain why it produced no durable learning. ${CONTEXT_EFFECT_GUIDANCE} ${PROPOSAL_GUIDANCE}`,
     inputSchema: { runId: z.string().min(1), outcome: z.enum(["completed", "partial", "blocked", "failed"]), summary: z.string().min(1), verification: z.array(VerificationSchema).default([]), contextEffects: z.array(ContextEffectSchema).default([]), requestIntent: RequestIntentDecisionSchema, proposals: z.array(CandidateProposalSchema).default([]), noDurableLearningReason: z.string().trim().min(1).optional() }
   }, async (input) => result(await finishRun(process.cwd(), input)));
   return server;

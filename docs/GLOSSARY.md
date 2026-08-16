@@ -39,9 +39,18 @@ revision pointer in one transaction.
 
 ### Candidate update
 
-An unaccepted proposal to create, revise, confirm, contradict, satisfy,
-supersede, or retire a statement. Candidates remain separate from durable
-knowledge until human review.
+A proposal to create, revise, confirm, contradict, satisfy, supersede, or
+retire a statement. Every proposal enters the candidate ledger before the
+repository knowledge mode either accepts it automatically or leaves it pending
+for human review.
+
+### Knowledge mode
+
+The repository policy that resolves candidate updates. `strict` leaves every
+proposal pending, `standard` automatically accepts changes involving only
+intents and beliefs, and `yolo` automatically accepts all proposals. The
+default is `standard`. Automatic resolutions preserve candidate, actor, run,
+mode, evidence, and revision provenance.
 
 ## Agent execution
 
@@ -133,26 +142,26 @@ the agent or user can understand why it applies.
 
 ### `bb_propose_update`
 
-Queues one candidate update for human review. It cannot make the proposal
-durable.
+Records one candidate update. The configured knowledge mode may resolve it
+automatically; the agent has no acceptance tool.
 
 ### `bb_finish_run`
 
 The structured end-of-run boundary. It records outcome, summary, verification,
-context effects, a request-intent disposition, and zero or more pending
-proposals. It cannot accept a proposal.
+context effects, a request-intent disposition, and zero or more proposals. The
+repository policy, rather than the MCP caller, resolves those proposals.
 
 ### Request-intent disposition
 
 The explicit decision made for every finished request. `durable` carries an
-intent create or lifecycle proposal for human review. `ephemeral` records why
+intent create or lifecycle proposal for policy resolution. `ephemeral` records why
 the request is conversational, operational, or already represented by reviewed
 context. A completed one-run outcome can be proposed as an intent whose initial
 status is `satisfied`, preserving history without making it active context.
 
 ### Reclassification
 
-A human-reviewed repair for a statement with the wrong kind. Acceptance
+A policy-resolved repair for a statement with the wrong kind. Acceptance
 supersedes the old typed identity and creates a new intent, belief, or
 commitment; it never rewrites the old statement's history.
 

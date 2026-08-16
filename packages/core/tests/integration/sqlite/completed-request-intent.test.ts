@@ -3,7 +3,7 @@ import { createSqliteFixture } from "../../support/sqlite-fixture.js";
 import { owner } from "../../support/statements.js";
 
 describe("completed request intent", () => {
-  it("creates a human-reviewed satisfied intent without making it retrievable", () => {
+  it("automatically accepts a satisfied request intent in standard mode without making it retrievable", () => {
     const fixture = createSqliteFixture();
     try {
       const sessionId = fixture.database.startSession({ repositoryId: fixture.repositoryId, worktreeId: fixture.worktreeId, host: "codex", externalSessionId: "completed-intent" });
@@ -21,7 +21,8 @@ describe("completed request intent", () => {
         proposals: [],
         endGitViewId: fixture.gitViewId
       });
-      const statement = fixture.database.resolveCandidate(candidateId!, "accept", owner)!;
+      expect(fixture.database.listCandidates(fixture.repositoryId, "auto_accepted")[0]?.id).toBe(candidateId);
+      const statement = fixture.database.listStatements(fixture.repositoryId)[0]!;
       expect(statement).toMatchObject({ kind: "intent", status: "satisfied", body: "Ship account deletion" });
       expect(fixture.database.searchLexical(fixture.repositoryId, "account deletion")).toEqual([]);
       expect(fixture.database.retrievalJobSummary(fixture.repositoryId, "qkv")).toMatchObject({ pending: 0, failed: 0, completed: 0 });

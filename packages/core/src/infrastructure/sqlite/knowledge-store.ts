@@ -39,6 +39,9 @@ export type CandidateRecord = {
   acceptedProposal?: CandidateProposal;
   state: string;
   createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: ActorRef;
+  resolutionNote?: string;
   runId?: string;
   target?: CurrentStatement;
   evidence: Array<Record<string, unknown>>;
@@ -254,6 +257,9 @@ export class KnowledgeStore {
         ...(row.accepted_proposal_json ? { acceptedProposal: CandidateProposalSchema.parse(fromJson(row.accepted_proposal_json)) } : {}),
         state: String(row.state),
         createdAt: String(row.created_at),
+        ...(row.resolved_at ? { resolvedAt: String(row.resolved_at) } : {}),
+        ...(row.resolved_by_json ? { resolvedBy: fromJson<ActorRef>(row.resolved_by_json) } : {}),
+        ...(row.resolution_note ? { resolutionNote: String(row.resolution_note) } : {}),
         ...(row.run_id ? { runId: String(row.run_id) } : {}),
         ...(targetId ? { target: this.getStatement(targetId, repositoryId) } : {}),
         evidence
@@ -265,7 +271,7 @@ export class KnowledgeStore {
     return Boolean(this.connection.database.prepare("SELECT 1 FROM candidate_updates WHERE run_id=? LIMIT 1").get(runId));
   }
 
-  resolveCandidate(id: string, decision: "accept" | "reject" | "defer", actor: ActorRef, note?: string, editedProposal?: CandidateProposal): CurrentStatement | undefined {
+  resolveCandidate(id: string, decision: "accept" | "reject" | "defer", actor: ActorRef, note?: string, editedProposal?: CandidateProposal, acceptedState: "accepted" | "auto_accepted" = "accepted"): CurrentStatement | undefined {
     const database = this.connection.database;
     return this.connection.transaction(() => {
       const row = database.prepare("SELECT * FROM candidate_updates WHERE id=?").get(id) as Record<string, unknown> | undefined;
@@ -282,7 +288,7 @@ export class KnowledgeStore {
         invariant(proposal.operation === original.operation && proposal.targetStatementId === original.targetStatementId, "Edits cannot change the candidate operation or target", "invalid_edit");
       } else proposal = this.validateProposal(String(row.repository_id), original);
       const result = this.acceptProposal(row, proposal, actor, id);
-      database.prepare("UPDATE candidate_updates SET state=?,accepted_proposal_json=?,resolved_at=?,resolved_by_json=?,resolution_note=? WHERE id=?").run(editedProposal ? "edited" : "accepted", editedProposal ? toJson(proposal) : null, now(), toJson(actor), note ?? null, id);
+      database.prepare("UPDATE candidate_updates SET state=?,accepted_proposal_json=?,resolved_at=?,resolved_by_json=?,resolution_note=? WHERE id=?").run(editedProposal ? "edited" : acceptedState, editedProposal ? toJson(proposal) : null, now(), toJson(actor), note ?? null, id);
       return result;
     });
   }
@@ -291,14 +297,14 @@ export class KnowledgeStore {
     const current = this.getStatement(statementId);
     if (!ACTIVE_STATUSES.has(current.status)) return undefined;
     const evidence = this.explainStatement(statementId).history.at(-1)?.evidence as Array<Record<string, unknown>> | undefined;
-    const reviewedEvidence = (evidence ?? []).slice(0, 3).map((item) => String(item.summary)).join("; ");
+    const durableEvidence = (evidence ?? []).slice(0, 3).map((item) => String(item.summary)).join("; ");
     const details = current.kind === "commitment"
       ? `rationale: ${String((current.attributes as { rationale: string }).rationale)}`
       : current.kind === "intent"
         ? `success conditions: ${((current.attributes as { successConditions: string[] }).successConditions).join("; ")}`
         : `confidence: ${String((current.attributes as { confidence: number }).confidence)}`;
     const scope = current.scope.kind === "repository" ? "repository" : `path:${current.scope.prefix}`;
-    return { id: current.id, revisionId: current.revisionId, kind: current.kind, status: current.status, text: `${current.kind}\n${current.body}\n${details}\nscope: ${scope}${reviewedEvidence ? `\nreviewed evidence: ${reviewedEvidence}` : ""}` };
+    return { id: current.id, revisionId: current.revisionId, kind: current.kind, status: current.status, text: `${current.kind}\n${current.body}\n${details}\nscope: ${scope}${durableEvidence ? `\nevidence: ${durableEvidence}` : ""}` };
   }
 
   listIndexDocuments(repositoryId: string): QkvIndexDocument[] {

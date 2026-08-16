@@ -1,6 +1,6 @@
 import { confirm, input, select } from "@inquirer/prompts";
 import type { Command } from "commander";
-import { CandidateProposalSchema, addStatement, getContext, openWorkspace, type CandidateProposal, type CurrentStatement, type Scope, type StatementAttributes, type StatementKind } from "@breadbowl/bb-core";
+import { CandidateProposalSchema, KnowledgeModeSchema, addStatement, getContext, openWorkspace, type CandidateProposal, type CurrentStatement, type Scope, type StatementAttributes, type StatementKind } from "@breadbowl/bb-core";
 import { configuredSemantic } from "../composition/semantic-provider.js";
 import { humanActor, print } from "./io.js";
 
@@ -70,11 +70,29 @@ export function registerKnowledgeCommands(program: Command): void {
     });
   }
 
-  program.command("status").description("List current statements and pending proposals").option("--json").action(async (options) => {
+  program.command("mode [mode]").description("Show or set automatic durable-knowledge acceptance: strict, standard, or yolo").option("--yes", "confirm yolo mode non-interactively").option("--json").action(async (modeValue, options) => {
     const workspace = await openWorkspace(process.cwd());
-    const value = { statements: workspace.database.listStatements(workspace.repositoryId), candidates: workspace.database.listCandidates(workspace.repositoryId) };
+    try {
+      if (!modeValue) {
+        const policy = workspace.database.knowledgePolicy(workspace.repositoryId);
+        return print(options.json ? policy : `Knowledge mode: ${policy.mode}\nUpdated by: ${policy.updatedBy.label ?? policy.updatedBy.id} at ${policy.updatedAt}`, Boolean(options.json));
+      }
+      const mode = KnowledgeModeSchema.parse(modeValue);
+      if (mode === "yolo" && !options.yes) {
+        if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("YOLO mode requires explicit confirmation; rerun with --yes in a non-interactive shell");
+        if (!(await confirm({ message: "YOLO mode automatically accepts agent-proposed commitments. Continue?", default: false }))) return;
+      }
+      const policy = workspace.database.setKnowledgeMode(workspace.repositoryId, mode, humanActor);
+      print(options.json ? policy : `Knowledge mode set to ${policy.mode}`, Boolean(options.json));
+    } finally { workspace.database.close(); }
+  });
+
+  program.command("status").description("List current statements, knowledge mode, and pending proposals").option("--json").action(async (options) => {
+    const workspace = await openWorkspace(process.cwd());
+    const value = { policy: workspace.database.knowledgePolicy(workspace.repositoryId), statements: workspace.database.listStatements(workspace.repositoryId), candidates: workspace.database.listCandidates(workspace.repositoryId) };
     if (options.json) print(value, true);
     else {
+      print(`knowledge mode: ${value.policy.mode}`);
       for (const item of value.statements) print(`${item.id}  ${item.kind.padEnd(10)} ${item.status.padEnd(12)} ${item.body}`);
       print(`${value.candidates.length} pending candidate(s)`);
     }
@@ -85,6 +103,7 @@ export function registerKnowledgeCommands(program: Command): void {
     const value = workspace.database.audit(workspace.repositoryId);
     if (options.json) return print(value, true);
     print([
+      `knowledge mode: ${value.policy.mode}`,
       `statements: ${value.knowledge.statements.active} active / ${value.knowledge.statements.total} total — ${JSON.stringify(value.knowledge.statements.byKind)}`,
       `candidate operations: ${JSON.stringify(value.knowledge.candidates.byOperation)}`,
       `lifecycle transitions: ${JSON.stringify(value.knowledge.lifecycleTransitions)}`,
@@ -96,7 +115,7 @@ export function registerKnowledgeCommands(program: Command): void {
     ].join("\n"));
   });
 
-  program.command("reclassify <statement-id> <kind>").description("Queue an atomic human-reviewed statement reclassification").option("--body <text>").option("--path <prefix>").option("--reason <text>").action(async (statementId, kindValue, options) => {
+  program.command("reclassify <statement-id> <kind>").description("Submit an atomic statement reclassification under repository knowledge policy").option("--body <text>").option("--path <prefix>").option("--reason <text>").action(async (statementId, kindValue, options) => {
     const kind = kindValue as StatementKind;
     if (!["intent", "belief", "commitment"].includes(kind)) throw new Error("kind must be intent, belief, or commitment");
     const workspace = await openWorkspace(process.cwd());
@@ -107,7 +126,8 @@ export function registerKnowledgeCommands(program: Command): void {
     const rationale = options.reason ?? await input({ message: "Why was the original classification wrong?", validate: (value) => value.trim().length > 0 || "A reason is required" });
     const proposal = CandidateProposalSchema.parse({ operation: "reclassify", kind, targetStatementId: statementId, body: options.body ?? current.body, scope, attributes, ...(kind === "intent" ? { initialStatus: "active" } : {}), rationale, evidencePaths: [], evidenceNotes: [`Human-requested reclassification from ${current.kind} to ${kind}`] });
     const candidateId = workspace.database.propose(workspace.repositoryId, undefined, proposal, workspace.gitViewId);
-    print(`${candidateId} queued; run \`bb review ${candidateId}\` to inspect and accept it.`);
+    const automaticallyAccepted = workspace.database.listCandidates(workspace.repositoryId, "auto_accepted").some((candidate) => candidate.id === candidateId);
+    print(automaticallyAccepted ? `${candidateId} automatically accepted by ${workspace.database.knowledgePolicy(workspace.repositoryId).mode} mode.` : `${candidateId} queued; run \`bb review ${candidateId}\` to inspect and accept it.`);
   });
 
   program.command("context <request>").description("Retrieve relevant project context").option("--path <path...>").option("--max-items <count>").option("--json").action(async (request, options) => {

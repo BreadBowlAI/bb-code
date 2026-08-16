@@ -6,6 +6,7 @@ describe("candidate single resolution", () => {
   it("rejects a second decision after human acceptance", () => {
     const fixture = createSqliteFixture();
     try {
+      fixture.database.setKnowledgeMode(fixture.repositoryId, "strict", owner);
       const proposal = { operation: "create" as const, kind: "belief" as const, body: "One reviewed result", scope: { kind: "repository" as const }, attributes: { confidence: 0.8 }, rationale: "Reviewed once", evidencePaths: [], evidenceNotes: [] };
       const id = fixture.database.propose(fixture.repositoryId, undefined, proposal, fixture.gitViewId);
       fixture.database.resolveCandidate(id, "accept", owner);

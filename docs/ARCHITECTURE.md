@@ -107,10 +107,12 @@ sequenceDiagram
   App->>DB: log fused retrieval
   App-->>Host: cited context + run ID
   Host->>App: bb_finish_run
-  App->>DB: outcome + pending candidates
-  Note over DB: Durable statements are unchanged
-  Host-->>DB: Human runs bb review
-  Note over DB: Accepted candidate appends a revision
+  App->>DB: outcome + candidates
+  App->>DB: resolve by strict / standard / yolo policy
+  alt policy leaves candidate pending
+    Host-->>DB: Human runs bb review
+  end
+  Note over DB: Every acceptance appends an immutable revision
 ```
 
 ## Persistence boundaries
@@ -119,7 +121,7 @@ SQLite is the source of truth. The `BbDatabase` facade keeps table layout out of
 
 | Store | Responsibility |
 |---|---|
-| `RepositoryStore` | repositories, locations, worktrees, Git views |
+| `RepositoryStore` | repositories, knowledge mode, locations, worktrees, Git views |
 | `RunStore` | sessions, runs, events, Stop policy, completion |
 | `KnowledgeStore` | statements, revisions, evidence, candidate review |
 | `SearchStore` | FTS, retrieval logs, provider state, sync jobs |

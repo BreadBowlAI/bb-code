@@ -6,6 +6,7 @@ describe("tool event deduplication", () => {
   it("records one Git-backed evidence item for a repeated host tool-use ID", () => {
     const fixture = createSqliteFixture();
     try {
+      fixture.database.setKnowledgeMode(fixture.repositoryId, "strict", owner);
       const sessionId = fixture.database.startSession({ repositoryId: fixture.repositoryId, worktreeId: fixture.worktreeId, host: "claude", externalSessionId: "dedupe" });
       const runId = fixture.database.startRun({ sessionId, prompt: "Edit file", gitViewId: fixture.gitViewId });
       const event = { kind: "after_tool", externalEventId: "tool-1", gitViewId: fixture.gitViewId, toolName: "Edit", paths: ["src/a.ts"], pathBlobs: { "src/a.ts": "blob-1" }, consequential: true, evidenceKind: "file_change", evidenceSummary: "Edit completed" };

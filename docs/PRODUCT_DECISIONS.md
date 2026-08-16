@@ -1,7 +1,7 @@
 # Product decisions
 
 Status: accepted direction for the MVP  
-Updated: 2026-08-05
+Updated: 2026-08-16
 
 This document is the compact decision record for bb-code. The rationale and
 alternatives are developed fully in [`BB_CODE_MVP.md`](BB_CODE_MVP.md).
@@ -66,8 +66,12 @@ The MCP server exposes exactly:
 4. `bb_finish_run`
 
 There is no agent-facing acceptance tool. `bb_finish_run` records structured
-learning and creates pending candidates; a human review action decides whether
-those candidates become durable statements.
+learning and creates candidates. The repository knowledge mode resolves each
+candidate: `strict` leaves every proposal for review, `standard` automatically
+accepts changes involving only intents and beliefs, and `yolo` automatically
+accepts every proposal. The default is `standard`. Automatic resolution uses
+the same immutable candidate and revision path as manual review and records the
+mode in its provenance.
 
 The coding agent reports context effects because it knows whether retrieved
 context changed its plan, caused clarification, avoided a violation, or changed
@@ -78,7 +82,8 @@ the effect from retrieval alone.
 
 1. Every durable statement has provenance and scope.
 2. Revisions are immutable; changes append history.
-3. Agents may propose knowledge but may not silently accept commitments.
+3. Agents propose knowledge; only the configured repository policy resolves it.
+   Commitments require review except in explicitly selected `yolo` mode.
 4. Code and tests may contradict a belief; they cannot decide user intent.
 5. Retrieval exposes uncertainty and can explain why a statement was selected.
 6. Accepted commitments remain active until explicitly superseded or retired.
@@ -129,7 +134,7 @@ and secrets never belong in the QKV request path.
 
 ## MVP proof
 
-The MVP is proven when a reviewed statement created during work in one coding
+The MVP is proven when a policy-resolved statement created during work in one coding
 agent is automatically retrieved during a later relevant request in another agent,
 and the developer can identify a repeated explanation or consequential mistake
 that the context prevented.

@@ -240,7 +240,7 @@ Validation:
 - only intents may be satisfied;
 - only commitments may be retired;
 - supersession may atomically close the target and create a replacement;
-- no proposal becomes durable without human review.
+- every proposal enters the candidate ledger before repository knowledge mode resolves it; `strict` reviews all, default `standard` auto-accepts intent/belief-only changes, and `yolo` auto-accepts all.
 
 ### Normalized runtime protocol
 
@@ -526,7 +526,7 @@ On `PostToolUse`:
 The injected context instructs the agent to call `bb_finish_run` once.
 
 `bb_finish_run` validates the run and repository, records outcome,
-verification, and context effects, converts proposals to pending candidates,
+verification, and context effects, converts proposals to candidates,
 resolves evidence paths against run events and Git, and marks the run as
 finish-tool-complete. Injected guidance tells the agent to report material
 effects by retrieved statement ID and to treat implementation facts as beliefs
@@ -543,7 +543,12 @@ At `Stop`:
 - if it is omitted again, finalize as partial and do not loop;
 - `SessionEnd` marks any remaining run abandoned.
 
-### Human review
+### Policy resolution and human review
+
+Every candidate is resolved by repository knowledge mode. `strict` leaves all
+candidates pending, default `standard` automatically accepts intent/belief-only
+changes, and `yolo` automatically accepts all candidates. Automatic acceptance
+uses the same transaction as manual acceptance and records mode provenance.
 
 `bb review` shows the proposed operation, old/new revision, scope, Git view,
 supporting evidence, rationale, confidence, and contradictions. The user can
@@ -559,12 +564,12 @@ configuration shared by CLI, hook, and MCP processes. Environment variables
 remain the highest-precedence override. `bb qkv enable` creates one
 `text_retention=none` index per repository, persists the service-selected model
 and immutable version, and enqueues current active statements. It displays an
-explicit disclosure that reviewed statements and retrieval queries will be
+explicit disclosure that policy-activated statements and retrieval queries will be
 processed by the service. `bb qkv status` reports provider state, runtime
 credential readiness, and queue health without exposing the API key.
 
-Index only reviewed current statements. The indexed text contains type,
-statement, rationale or success conditions, scope, and a short reviewed
+Index only current statements activated by repository policy. The indexed text contains type,
+statement, rationale or success conditions, scope, and a short
 evidence summary. Use stable `doc_id = bb:<statement-id>`. Metadata contains
 statement ID, revision ID, kind, and status, but no code.
 
@@ -678,7 +683,7 @@ Performance targets:
 - State is local and single-developer; only `.bb/repo.json` is committed.
 - QKV is optional and disabled by default.
 - No separate extraction model or model API key is required.
-- Only reviewed statements are indexed remotely.
+- Only current statements activated by repository policy are indexed remotely.
 - Queries are sent to QKV only after explicit enablement.
 - CLI review is the only management UI.
 - Pre-tool checks warn but never block.

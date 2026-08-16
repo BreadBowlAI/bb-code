@@ -46,8 +46,8 @@ Install `plugins/bb-code` through the included Codex marketplace, add `.claude-p
 
 - `bb_context` retrieves applicable context for a request and returns the active run ID when hooks started the run.
 - `bb_explain` returns one statement's typed current revision.
-- `bb_propose_update` queues one proposed learning for human review.
-- `bb_finish_run` records the outcome, verification, context effects, an explicit request-intent decision, and proposals. A durable request becomes a reviewed intent proposal; conversational or operational work records why it is ephemeral. After any tool-assisted work with no learning proposals, it requires an explicit `noDurableLearningReason`.
+- `bb_propose_update` records one proposed learning; the repository knowledge mode determines whether it activates immediately or waits for review.
+- `bb_finish_run` records the outcome, verification, context effects, an explicit request-intent decision, and proposals. A durable request becomes an intent proposal; conversational or operational work records why it is ephemeral. After any tool-assisted work with no learning proposals, it requires an explicit `noDurableLearningReason`.
 
 There is intentionally no `accept` MCP tool.
 
@@ -60,6 +60,7 @@ bb init
 bb integrate codex|claude|cursor
 bb doctor
 bb add intent|belief|commitment
+bb mode [strict|standard|yolo] [--yes]
 bb status
 bb audit [--json]
 bb reclassify <statement-id> <intent|belief|commitment>
@@ -71,13 +72,13 @@ bb sync [--force]
 bb mcp serve
 ```
 
-`bb add commitment` always asks for explicit confirmation unless `--yes` is supplied by the human running the command. `bb review --edit` can correct a proposed kind, scope, and kind-specific attributes before acceptance. `bb reclassify` queues an atomic repair that supersedes the old typed identity and creates a reviewed replacement without rewriting history. `bb audit` reports statement balance, lifecycle use, request-intent decisions, retrieval volume, and consequential context effects.
+Knowledge mode defaults to `standard`: intent- and belief-only proposals activate automatically, while anything touching a commitment waits for review. `strict` reviews everything; `yolo` activates everything and requires explicit confirmation when selected interactively. Every proposal still enters the candidate ledger, and automatic resolutions are marked `auto_accepted` with mode provenance. Mode changes are prospective, so already-pending candidates remain available for explicit review. `bb add commitment` asks for explicit confirmation unless `--yes` is supplied by the human running the command. `bb review --edit` can correct a pending kind, scope, and kind-specific attributes before acceptance. `bb reclassify` uses the same policy-aware atomic repair path without rewriting history. `bb audit` reports the active mode, statement balance, lifecycle use, request-intent decisions, retrieval volume, and consequential context effects.
 
 ## Local and proprietary boundaries
 
 The runtime, adapters, plugins, schemas, local ranking, and review flow are Apache-2.0. SQLite is the source of truth. QKV is an optional semantic candidate generator behind the `SemanticRetrievalProvider` interface; local FTS5 continues working when QKV is absent or unavailable.
 
-QKV receives only reviewed current statement text, stable statement/revision IDs, kind, status, scope, reviewed rationale/success conditions, a short reviewed evidence summary, and a bounded secret-filtered retrieval-query projection. bb-code does not send source code, stored/raw prompts, tool input/output, diffs, environment values, secrets, or transcripts. Run `bb qkv configure` to save credentials in an owner-only user configuration shared by CLI, hooks, and MCP, then run `bb qkv enable --yes` and `bb sync` to opt in. When credentials are missing, interactive `enable` and `sync` commands offer secure setup; non-interactive commands fail with instructions instead of blocking for input. Use `bb qkv configure --from-env` in automation. Environment variables remain the highest-precedence override. `bb qkv status` reports runtime readiness and queue failures without exposing the API key. Use `bb sync --force` to immediately retry all failed jobs for the current repository, including exhausted jobs; interrupted pending jobs are retried by an ordinary sync. `BB_QKV_URL` remains a temporary deprecated alias.
+QKV receives only current statements activated by repository policy, stable statement/revision IDs, kind, status, scope, rationale/success conditions, a short evidence summary, and a bounded secret-filtered retrieval-query projection. bb-code does not send source code, stored/raw prompts, tool input/output, diffs, environment values, secrets, or transcripts. Run `bb qkv configure` to save credentials in an owner-only user configuration shared by CLI, hooks, and MCP, then run `bb qkv enable --yes` and `bb sync` to opt in. When credentials are missing, interactive `enable` and `sync` commands offer secure setup; non-interactive commands fail with instructions instead of blocking for input. Use `bb qkv configure --from-env` in automation. Environment variables remain the highest-precedence override. `bb qkv status` reports runtime readiness and queue failures without exposing the API key. Use `bb sync --force` to immediately retry all failed jobs for the current repository, including exhausted jobs; interrupted pending jobs are retried by an ordinary sync. `BB_QKV_URL` remains a temporary deprecated alias.
 
 ## Development
 

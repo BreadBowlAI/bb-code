@@ -40,6 +40,7 @@ bb doctor
 bb add intent
 bb add belief
 bb add commitment
+bb mode [strict|standard|yolo]
 bb status
 bb audit [--json]
 bb reclassify <statement-id> <intent|belief|commitment>
@@ -57,7 +58,7 @@ bb adapter claude <event>
 bb adapter cursor <event>
 ```
 
-Direct commitment creation requires explicit confirmation. Agent-facing interfaces can only propose a commitment.
+Direct commitment creation requires explicit confirmation. Agent-facing interfaces can only propose knowledge; repository mode resolves the resulting candidate.
 
 ## MCP contract
 
@@ -81,7 +82,7 @@ bb_finish_run({
 })
 ```
 
-`bb_finish_run` is the end-of-run learning boundary. The coding agent submits structured learning using reasoning it already performed. Every completion separately classifies the request: an outcome that should survive the run produces a human-reviewed intent proposal, while a conversational or operational request records a specific ephemeral reason. Intent creates may start `active`, `satisfied`, or `abandoned`, allowing a one-run outcome to retain an honest lifecycle without becoming retrievable after completion. Always-on hook context and MCP descriptions use one classification rubric: intents are outcomes, beliefs are fallible claims about current implementation or behavior, and commitments are explicit future rules, constraints, or chosen decisions. Implementing, verifying, or approving code does not by itself turn a current fact into a commitment. Read-only investigations may produce beliefs when a non-obvious finding would prevent repeated inspection. Before creating a statement, agents compare retrieved context and prefer the existing statement lifecycle over duplicates. Exact same-kind duplicates are rejected deterministically. Agents report a context effect by statement ID when retrieved context changed the plan, caused clarification, avoided a violation, or changed verification. Agents propose only knowledge likely to affect future work, omitting trivial-to-rediscover facts and temporary details. A tool-assisted run must have at least one non-request proposal submitted during the run or provide a non-empty, specific `noDurableLearningReason`. bb-code does not invoke a second extraction model.
+`bb_finish_run` is the end-of-run learning boundary. The coding agent submits structured learning using reasoning it already performed. Every completion separately classifies the request: an outcome that should survive the run produces an intent proposal, while a conversational or operational request records a specific ephemeral reason. Intent creates may start `active`, `satisfied`, or `abandoned`, allowing a one-run outcome to retain an honest lifecycle without becoming retrievable after completion. Always-on hook context and MCP descriptions use one classification rubric: intents are outcomes, beliefs are fallible claims about current implementation or behavior, and commitments are explicit future rules, constraints, or chosen decisions. Implementing, verifying, or approving code does not by itself turn a current fact into a commitment. Read-only investigations may produce beliefs when a non-obvious finding would prevent repeated inspection. Before creating a statement, agents compare retrieved context and prefer the existing statement lifecycle over duplicates. Exact same-kind duplicates are rejected deterministically. Agents report a context effect by statement ID when retrieved context changed the plan, caused clarification, avoided a violation, or changed verification. Agents propose only knowledge likely to affect future work, omitting trivial-to-rediscover facts and temporary details. A tool-assisted run must have at least one non-request proposal submitted during the run or provide a non-empty, specific `noDurableLearningReason`. bb-code does not invoke a second extraction model.
 
 ## Domain
 
@@ -101,7 +102,7 @@ type ActorRef = {
 
 Intents are `active | satisfied | abandoned | superseded`. Beliefs are `active | contradicted | superseded`. Commitments are `accepted | superseded | retired`. Proposed is not a status; proposals live in the candidate queue.
 
-Candidate operations are `create | revise | confirm | contradict | satisfy | abandon | supersede | retire | reclassify`. Create requires a kind, body, scope, and matching attributes. Other operations require a target. Only beliefs may be contradicted, only intents satisfied or abandoned, and only commitments retired. Reclassification is an atomic human-reviewed repair: the old typed statement is superseded and a correctly typed replacement receives a new identity. No proposal becomes durable without review.
+Candidate operations are `create | revise | confirm | contradict | satisfy | abandon | supersede | retire | reclassify`. Create requires a kind, body, scope, and matching attributes. Other operations require a target. Only beliefs may be contradicted, only intents satisfied or abandoned, and only commitments retired. Reclassification is atomic: the old typed statement is superseded and a correctly typed replacement receives a new identity. Repository knowledge mode is `strict | standard | yolo` and defaults to `standard`. Strict leaves every candidate pending; standard automatically accepts only operations whose source and result kinds exclude commitments; yolo automatically accepts every valid candidate. Automatic and manual resolution share one candidate/revision transaction and retain resolver, mode, run, evidence, and timestamp provenance.
 
 ## Runtime protocol
 
@@ -134,7 +135,7 @@ The core never imports native event types. Adapters ignore bb-code's own MCP nam
 SQLite enables WAL, foreign keys, normal synchronous mode, and a five-second busy timeout.
 
 ```text
-repositories
+repositories(knowledge_mode, knowledge_mode_updated_at, knowledge_mode_updated_by)
 repository_locations(repository_id, canonical_root, git_common_dir)
 worktrees(repository_location_id, canonical_root, git_dir)
 git_views(repository_id, worktree_id, commit, tree, parents, patch_id, dirty_fingerprint, changed_paths, branch)
@@ -197,15 +198,15 @@ The bootstrap skill may inspect repository documents and propose context, but do
 
 ### Run finish
 
-The agent records outcome, verification, effects, its request-intent disposition, and its explicit learning decision in one transaction. Context effects must reference an item logged for that run. Tool-assisted runs cannot finish with an unexplained empty non-request proposal set; proposals previously submitted through `bb_propose_update` count toward the decision. A Stop hook nudges once whenever `bb_finish_run` was omitted, including read-only or conversational runs, so every request receives an intent disposition. Candidate acceptance, including kind/scope/attribute correction, is a separate human CLI action that preserves the original proposal.
+The agent records outcome, verification, effects, its request-intent disposition, and its explicit learning decision in one transaction. Context effects must reference an item logged for that run. Tool-assisted runs cannot finish with an unexplained empty non-request proposal set; proposals previously submitted through `bb_propose_update` count toward the decision. A Stop hook nudges once whenever `bb_finish_run` was omitted, including read-only or conversational runs, so every request receives an intent disposition. Every proposal enters the candidate ledger, then repository knowledge mode either resolves it in the same transaction or leaves it for human review. Human edits preserve the original proposal separately.
 
 ## Git behavior
 
-Repository identity does not depend on a branch name. Git views contain commit/tree/parent SHAs, stable patch ID when collected, changed paths, and a dirty fingerprint derived from staged, unstaged, and untracked path identities. Beliefs use ancestry and supporting blob SHAs for freshness; dirty beliefs require the same worktree/fingerprint; divergent beliefs require an active merge or an explicitly named branch. Rebase/squash recovery creates a human-reviewed re-anchor candidate after one unambiguous patch-ID match and never remaps silently.
+Repository identity does not depend on a branch name. Git views contain commit/tree/parent SHAs, stable patch ID when collected, changed paths, and a dirty fingerprint derived from staged, unstaged, and untracked path identities. Beliefs use ancestry and supporting blob SHAs for freshness; dirty beliefs require the same worktree/fingerprint; divergent beliefs require an active merge or an explicitly named branch. Rebase/squash recovery creates a policy-resolved re-anchor candidate after one unambiguous patch-ID match; the candidate ledger remains the audit trail and no statement identity is remapped.
 
 ## QKV boundary
 
-QKV operations are create index, batch-contract upsert/delete document, and search. `bb qkv configure` stores the endpoint and API key in an owner-only user file shared by CLI, hooks, and MCP; process environment values remain the highest-precedence override. Interactive `bb qkv enable` and `bb sync` offer to configure missing credentials. Non-interactive invocations never prompt and instead provide an actionable error; automation can use `bb qkv configure --from-env`. Enablement requires an explicit disclosure, `text_retention: "none"`, and an immutable service-selected model version. `bb qkv status` distinguishes persisted provider enablement, runtime credential readiness, and pending/failed/exhausted jobs without exposing the key. Stable documents use `bb:<statement-id>` and contain only reviewed current statement text plus minimal reviewed retrieval metadata. The client sends the QKV `documents` array even for one stable document and treats an HTTP 200 partial-ingestion entry as failure. Semantic search uses a bounded deterministic term/path projection that removes code blocks, obvious secret assignments, authorization values, and high-entropy tokens rather than sending the stored raw prompt. Jobs coalesce per statement and retry with exponential backoff. `bb sync --force` immediately retries every failed job for the current repository with a fresh attempt budget while interrupted pending jobs remain naturally retryable. Each invocation still attempts each eligible job at most once and exits unsuccessfully when any attempted job fails. SQLite remains the system of record and local FTS falls back after a 1.2-second semantic deadline. Retrieval ranking is relevance-first: statement kind determines how the agent treats an item, not a relevance multiplier.
+QKV operations are create index, batch-contract upsert/delete document, and search. `bb qkv configure` stores the endpoint and API key in an owner-only user file shared by CLI, hooks, and MCP; process environment values remain the highest-precedence override. Interactive `bb qkv enable` and `bb sync` offer to configure missing credentials. Non-interactive invocations never prompt and instead provide an actionable error; automation can use `bb qkv configure --from-env`. Enablement requires an explicit disclosure, `text_retention: "none"`, and an immutable service-selected model version. `bb qkv status` distinguishes persisted provider enablement, runtime credential readiness, and pending/failed/exhausted jobs without exposing the key. Stable documents use `bb:<statement-id>` and contain only policy-activated current statement text plus minimal retrieval metadata. The client sends the QKV `documents` array even for one stable document and treats an HTTP 200 partial-ingestion entry as failure. Semantic search uses a bounded deterministic term/path projection that removes code blocks, obvious secret assignments, authorization values, and high-entropy tokens rather than sending the stored raw prompt. Jobs coalesce per statement and retry with exponential backoff. `bb sync --force` immediately retries every failed job for the current repository with a fresh attempt budget while interrupted pending jobs remain naturally retryable. Each invocation still attempts each eligible job at most once and exits unsuccessfully when any attempted job fails. SQLite remains the system of record and local FTS falls back after a 1.2-second semantic deadline. Retrieval ranking is relevance-first: statement kind determines how the agent treats an item, not a relevance multiplier.
 
 Never send raw code, diffs, stored/raw prompts, tool input/output, secrets, environment values, or host transcripts.
 
@@ -217,9 +218,9 @@ Never send raw code, diffs, stored/raw prompts, tool input/output, secrets, envi
 - Codex, Claude, and Cursor hooks create runs; Codex and Claude inject prompt context directly, while Cursor retrieves it through the always-applied project rule and exact-request run binding.
 - One before/after pair is retained for each host tool-use ID while duplicate delivery of either phase remains idempotent.
 - MCP exposes exactly the four named tools.
-- `bb_finish_run` records a request-intent disposition and queues proposals or an explicit no-learning reason for tool-assisted work; it cannot accept proposals.
-- `bb audit` exposes lifecycle balance and consequential-recall metrics, and reviewed reclassification repairs a wrong kind without rewriting history.
-- Completion and review transitions are transactional and tested.
+- `bb_finish_run` records a request-intent disposition and proposals or an explicit no-learning reason for tool-assisted work; configured policy, not the agent tool, resolves proposals.
+- `bb audit` exposes knowledge mode, lifecycle balance, and consequential-recall metrics, and policy-resolved reclassification repairs a wrong kind without rewriting history.
+- Completion, automatic acceptance, and review transitions are transactional and tested.
 - QKV is optional and degrades to local retrieval.
 - Type checking, behavior tests, the release acceptance harness, build, plugin validation, packaged installation, concurrent-host WAL, and 10,000-statement performance gates pass on Node 24.
 
