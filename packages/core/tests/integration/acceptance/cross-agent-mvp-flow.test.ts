@@ -35,7 +35,7 @@ describe("cross-agent MVP release flow", () => {
         occurredAt: "2026-01-01T00:00:00.000Z",
         payload: { prompt: "Change storage while keeping local storage authoritative" }
       }, databasePath);
-      expect(codex.output).toContain("Keep local storage authoritative");
+      expect(codex.effects).toContainEqual(expect.objectContaining({ type: "retrieved_context", content: expect.stringContaining("Keep local storage authoritative") }));
       expect(codex.runId).toBeTruthy();
 
       fixture.write("src/storage.ts", "export const sourceOfTruth = 'sqlite';\n");
@@ -86,7 +86,7 @@ describe("cross-agent MVP release flow", () => {
         occurredAt: "2026-01-01T00:02:00.000Z",
         payload: { prompt: "Where is storage state persisted?" }
       }, databasePath);
-      expect(claude.output).toContain("Storage state is persisted in SQLite");
+      expect(claude.effects).toContainEqual(expect.objectContaining({ type: "retrieved_context", content: expect.stringContaining("Storage state is persisted in SQLite") }));
     } finally {
       fixture.dispose();
     }

@@ -93,7 +93,8 @@ export function registerSetupCommands(program: Command): void {
     }
     if (MCP_TOOL_NAMES.length !== 4 || new Set(MCP_TOOL_NAMES).size !== 4) failures.push("MCP must initialize exactly four unique tools");
     else print(`ok MCP ${MCP_TOOL_NAMES.join(", ")}`);
-    if (!renderCodexResponse("UserPromptSubmit", { output: "smoke" }) || !renderClaudeResponse("UserPromptSubmit", { output: "smoke" }) || !renderCursorResponse("beforeSubmitPrompt", { output: "smoke" })) failures.push("Hook response rendering failed");
+    const smokeContext = { effects: [{ type: "retrieved_context" as const, content: "smoke" }] };
+    if (!renderCodexResponse("UserPromptSubmit", smokeContext) || !renderClaudeResponse("UserPromptSubmit", smokeContext) || !renderCursorResponse("beforeSubmitPrompt", { effects: [] })) failures.push("Hook response rendering failed");
     else print("ok hook response formatter");
     const hostRuns = workspace.database.hostRunCounts(workspace.repositoryId);
     const hostActivity = Object.entries(hostRuns).filter(([, count]) => count > 0);

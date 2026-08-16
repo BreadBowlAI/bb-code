@@ -3,7 +3,7 @@ import { renderClaudeResponse, renderCodexResponse } from "../../../src/adapters
 
 describe("host hook response rendering", () => {
   it("renders context and one-time stop continuation through host-specific boundaries", () => {
-    expect(renderCodexResponse("UserPromptSubmit", { output: "context" })).toEqual({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: "context" } });
-    expect(renderClaudeResponse("Stop", { nudge: "finish the run" })).toEqual({ decision: "block", reason: "finish the run" });
+    expect(renderCodexResponse("UserPromptSubmit", { effects: [{ type: "retrieved_context", content: "context" }] })).toEqual({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: "context" } });
+    expect(renderClaudeResponse("Stop", { effects: [{ type: "completion_nudge", content: "finish the run" }] })).toEqual({ decision: "block", reason: "finish the run" });
   });
 });

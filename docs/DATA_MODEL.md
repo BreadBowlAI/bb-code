@@ -22,4 +22,11 @@ Migration v5 records each finished run's structured request-intent disposition a
 
 Migration v6 adds the repository knowledge mode and its update provenance. Existing and new repositories default to `standard`; automatic proposal resolution still passes through the candidate and immutable revision ledger.
 
+Migration v7 adds `runs.completion_reason`. Structured completion records
+`reported`; a host Stop or newer generation closing an unfinished run records
+`missing_finish`; session cleanup records `session_ended`. Runtime guidance is
+stored as a deduplicated `run_events` entry, allowing adapters to issue a
+one-time reminder or path-commitment notice without adding host-specific state
+to the domain.
+
 SQLite uses WAL, foreign keys, normal synchronous mode, and a five-second busy timeout. IDs are ULIDs with readable prefixes such as `repo_`, `run_`, `bel_`, and `com_`.

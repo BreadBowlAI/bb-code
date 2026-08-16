@@ -6,7 +6,7 @@
     "preToolUse": [{ "command": "bb adapter cursor preToolUse" }],
     "postToolUse": [{ "command": "bb adapter cursor postToolUse" }],
     "postToolUseFailure": [{ "command": "bb adapter cursor postToolUseFailure" }],
-    "stop": [{ "command": "bb adapter cursor stop", "loop_limit": 1 }],
+    "stop": [{ "command": "bb adapter cursor stop" }],
     "sessionEnd": [{ "command": "bb adapter cursor sessionEnd" }]
   }
 }

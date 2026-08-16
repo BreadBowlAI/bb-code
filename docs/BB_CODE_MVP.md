@@ -818,7 +818,14 @@ hooks, custom tools, session events, and a typed SDK. Keep the adapter isolated
 and pin tested versions, but integrate through the public plugin surface rather
 than maintaining a fork.
 
-Cursor and Windsurf can initially use MCP plus checked-in instructions until they expose a sufficiently deterministic lifecycle integration.
+Cursor now exposes a sufficiently deterministic public hook surface for a
+project adapter, but its response capabilities differ from Codex and Claude.
+`beforeSubmitPrompt` starts the run while an always-applied rule performs one
+explicit `bb_context` lookup. `postToolUse.additional_context` carries a terse
+completion reminder. Stop is observational: its `followup_message` would be a
+new user turn, so bb-code records an omitted structured finish as partial
+instead of creating a synthetic request. Windsurf can continue using MCP plus
+checked-in instructions until it exposes an equivalent lifecycle.
 
 ## Proposed implementation shape
 
@@ -1261,6 +1268,7 @@ The integration strategy follows the extension boundaries that current tools act
 - [Codex plugin packaging](https://developers.openai.com/plugins/build/plugins) can bundle skills, MCP configuration, and lifecycle hooks.
 - [OpenCode V2 plugins](https://opencode.ai/v2/docs/build/plugins) expose a request hook immediately before model dispatch and before/after tool hooks, but the V2 plugin API is beta.
 - [Claude Code hooks](https://code.claude.com/docs/en/hooks) expose Claude's native task, tool, compaction, and completion lifecycle events with model-visible additional context.
+- [Cursor hooks](https://cursor.com/docs/hooks) expose prompt, tool, Stop, and session boundaries; their response schemas explain why prompt retrieval is MCP-driven, post-tool reminders use `additional_context`, and Stop never uses `followup_message` for bookkeeping.
 - [MCP server primitives](https://modelcontextprotocol.io/specification/2026-07-28/server/index) distinguish model-controlled tools from application-controlled resources, which is why MCP alone is not the deterministic lifecycle boundary.
 - [Cursor Memories](https://docs.cursor.com/en/context/memories) already extract project-scoped rules from conversations, illustrating why generic “memory” is not sufficient differentiation.
 - [Git worktree documentation](https://git-scm.com/docs/git-worktree) confirms that linked worktrees share much repository state while keeping `HEAD` and other state per worktree.

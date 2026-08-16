@@ -21,7 +21,7 @@ describe("Cursor MCP context binding", () => {
         cwd: fixture.root,
         occurredAt: "2026-01-01T00:00:00.000Z",
         payload: { prompt: "Add authentication" }
-      }, databasePath);
+      }, databasePath, undefined, { contextAtRunStart: "defer", completionReminder: "none", unfinishedStop: "finalize_partial" });
 
       const context = await getContext({ cwd: fixture.root, request: "Add authentication", databasePath });
       expect(context.rendered).toContain(`Run: ${started.runId}`);

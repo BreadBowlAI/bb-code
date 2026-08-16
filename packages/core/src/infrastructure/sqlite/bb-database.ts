@@ -43,7 +43,7 @@ export class BbDatabase {
   latestRunningRunForRequest(repositoryId: string, worktreeId: string, prompt: string): string | undefined { return this.runs.latestRunningRunForRequest(repositoryId, worktreeId, prompt); }
   addRunEvent(runId: string, event: RunEventInput): boolean { return this.runs.addEvent(runId, event); }
   finishRun(input: FinishRunRecord): void { this.runs.finish(input); }
-  handleStop(runId: string): "none" | "nudge" | "finalized" { return this.runs.handleStop(runId); }
+  handleStop(runId: string, policy?: Parameters<RunStore["handleStop"]>[1]): "none" | "nudge" | "finalized" { return this.runs.handleStop(runId, policy); }
   hostRunCounts(repositoryId: string): Record<string, number> { return this.runs.hostRunCounts(repositoryId); }
   runStartGitView(runId: string): GitView | undefined {
     const id = this.runs.startGitViewId(runId);

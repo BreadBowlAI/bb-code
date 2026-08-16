@@ -1,5 +1,5 @@
 import type { ContextItem } from "../../domain/context.js";
-import { finishRunGuidance } from "../runs/durable-learning-guidance.js";
+import { finishRunReminder } from "../runs/durable-learning-guidance.js";
 
 const MAX_RENDERED_CHARACTERS = 4_800;
 const MAX_RENDERED_TOKENS = 1_200;
@@ -17,8 +17,7 @@ export function renderContextResult(items: ContextItem[], runId?: string): { ren
   ];
   const footer = runId ? [
     "",
-    finishRunGuidance(runId),
-    "Proposal attributes: intent={owner:{kind,id},priority,successConditions}+initialStatus; belief={confidence}; commitment={rationale,authority:{kind,id},revisitCondition?}. Actor kind is human, agent, or repository_document and id is always required."
+    finishRunReminder(runId)
   ] : [];
   const selected: ContextItem[] = [];
   const conflicts: string[] = [];

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { isAbsolute, relative } from "node:path";
 import type { SemanticRetrievalProvider } from "../../ports/semantic-retrieval.js";
 import { RuntimeEventSchema, type RuntimeEvent } from "../../domain/runtime.js";
@@ -6,7 +7,26 @@ import { retrieveContext } from "../context/retrieve-context.js";
 import { finishRunGuidance } from "../runs/durable-learning-guidance.js";
 import { openWorkspace } from "../workspace/open-workspace.js";
 
-export type RuntimeEventResult = { output?: string; runId?: string; nudge?: string };
+export type RuntimeEffect =
+  | { type: "retrieved_context"; content: string }
+  | { type: "path_commitments"; content: string }
+  | { type: "completion_reminder"; content: string }
+  | { type: "completion_nudge"; content: string }
+  | { type: "completion_missing" };
+
+export type RuntimeEventResult = { effects: RuntimeEffect[]; runId?: string };
+
+export type RuntimeProcessingPolicy = {
+  contextAtRunStart: "retrieve" | "defer";
+  completionReminder: "none" | "after_first_consequential_tool";
+  unfinishedStop: "nudge_once" | "finalize_partial";
+};
+
+export const DEFAULT_RUNTIME_PROCESSING_POLICY: RuntimeProcessingPolicy = {
+  contextAtRunStart: "retrieve",
+  completionReminder: "none",
+  unfinishedStop: "nudge_once"
+};
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.length ? value : typeof value === "number" ? String(value) : undefined;
@@ -55,32 +75,42 @@ function classifyTool(toolName: string | undefined, toolCategory: string | undef
   };
 }
 
-export async function processRuntimeEvent(raw: unknown, databasePath?: string, semantic?: SemanticRetrievalProvider): Promise<RuntimeEventResult> {
+function guidanceKey(kind: string, values: string[]): string {
+  return `${kind}:${createHash("sha256").update(JSON.stringify(values)).digest("hex")}`;
+}
+
+export async function processRuntimeEvent(
+  raw: unknown,
+  databasePath?: string,
+  semantic?: SemanticRetrievalProvider,
+  policy: RuntimeProcessingPolicy = DEFAULT_RUNTIME_PROCESSING_POLICY
+): Promise<RuntimeEventResult> {
   const event: RuntimeEvent = RuntimeEventSchema.parse(raw);
   const inspectPatchId = event.event === "start_run" || event.event === "finish_run" || event.event === "session_end";
   const workspace = await openWorkspace(event.cwd, { ...(databasePath ? { databasePath } : {}), inspectPatchId, lightweightGit: event.event === "before_tool" || event.event === "after_tool" });
   try {
   if (event.event === "session_start") {
     workspace.database.startSession({ repositoryId: workspace.repositoryId, worktreeId: workspace.worktreeId, host: event.host, externalSessionId: event.externalSessionId, metadata: { schemaVersion: event.schemaVersion } });
-    return {};
+    return { effects: [] };
   }
   if (event.event === "session_end") {
     workspace.database.endSession(event.host, event.externalSessionId);
-    return {};
+    return { effects: [] };
   }
   const sessionId = workspace.database.startSession({ repositoryId: workspace.repositoryId, worktreeId: workspace.worktreeId, host: event.host, externalSessionId: event.externalSessionId });
   if (event.event === "start_run") {
     const prompt = stringValue(event.payload.prompt) ?? stringValue(event.payload.user_prompt) ?? "Coding request";
     const runId = workspace.database.startRun({ sessionId, ...(event.externalTurnId ? { externalTurnId: event.externalTurnId } : {}), prompt, gitViewId: workspace.gitViewId });
+    if (policy.contextAtRunStart === "defer") return { runId, effects: [] };
     const context = await retrieveContext({ database: workspace.database, repositoryId: workspace.repositoryId, gitViewId: workspace.gitViewId, git: workspace.git, query: prompt, paths: promptPaths(workspace.root, prompt), runId, ...(semantic ? { semantic } : {}) });
-    return { runId, output: context.rendered };
+    return { runId, effects: [{ type: "retrieved_context", content: context.rendered }] };
   }
   const runId = workspace.database.latestRunningRun(event.host, event.externalSessionId);
-  if (!runId) return {};
+  if (!runId) return { effects: [] };
   if (event.event === "before_tool" || event.event === "after_tool") {
     const toolName = stringValue(event.payload.tool_name) ?? stringValue(event.payload.toolName);
     const toolCategory = stringValue(event.payload.tool_category);
-    if (isBbTool(toolName)) return { runId };
+    if (isBbTool(toolName)) return { runId, effects: [] };
     const outcome = stringValue(event.payload.outcome);
     const inputPaths = payloadPaths(workspace.root, event.payload);
     let paths = inputPaths;
@@ -97,7 +127,7 @@ export async function processRuntimeEvent(raw: unknown, databasePath?: string, s
         if (sha) pathBlobs[path] = sha;
       }
     }
-    workspace.database.addRunEvent(runId, {
+    const inserted = workspace.database.addRunEvent(runId, {
       kind: event.event,
       ...(event.externalToolUseId ? { externalEventId: event.externalToolUseId } : {}),
       gitViewId: workspace.gitViewId,
@@ -111,13 +141,42 @@ export async function processRuntimeEvent(raw: unknown, databasePath?: string, s
     });
     if (event.event === "before_tool" && paths.length) {
       const commitments = workspace.database.listStatements(workspace.repositoryId).filter((statement) => statement.kind === "commitment" && statement.status === "accepted" && pathCommitmentApplies(statement, paths));
-      if (commitments.length) return { runId, output: `# bb-code path commitments\n${commitments.map((statement) => `- [bb:${statement.id}@${statement.revisionId}] ${statement.body}`).join("\n")}` };
+      const noticeKey = guidanceKey("path-commitments", [...commitments.map((statement) => statement.id).sort(), ...paths.slice().sort()]);
+      if (commitments.length && inserted && workspace.database.addRunEvent(runId, {
+        kind: "guidance",
+        externalEventId: noticeKey,
+        gitViewId: workspace.gitViewId,
+        paths,
+        payload: { guidance: "path_commitments", statementIds: commitments.map((statement) => statement.id) },
+        occurredAt: event.occurredAt,
+        consequential: false
+      })) {
+        return { runId, effects: [{ type: "path_commitments", content: `# bb-code path commitments\n${commitments.map((statement) => `- [bb:${statement.id}@${statement.revisionId}] ${statement.body}`).join("\n")}\nReview these constraints, then retry the tool if the action is compatible.` }] };
+      }
     }
-    return { runId };
+    if (
+      event.event === "after_tool"
+      && inserted
+      && classification.consequential
+      && policy.completionReminder === "after_first_consequential_tool"
+      && workspace.database.addRunEvent(runId, {
+        kind: "guidance",
+        externalEventId: "completion-reminder",
+        gitViewId: workspace.gitViewId,
+        payload: { guidance: "completion_reminder" },
+        occurredAt: event.occurredAt,
+        consequential: false
+      })
+    ) {
+      return { runId, effects: [{ type: "completion_reminder", content: `bb-code run ${runId} is now consequential. Before your final response, call bb_finish_run with this runId.` }] };
+    }
+    return { runId, effects: [] };
   }
-  if (event.event === "finish_run" && workspace.database.handleStop(runId) === "nudge") {
-    return { runId, nudge: finishRunGuidance(runId) };
+  if (event.event === "finish_run") {
+    const stop = workspace.database.handleStop(runId, policy.unfinishedStop);
+    if (stop === "nudge") return { runId, effects: [{ type: "completion_nudge", content: finishRunGuidance(runId) }] };
+    if (stop === "finalized") return { runId, effects: [{ type: "completion_missing" }] };
   }
-  return { runId };
+  return { runId, effects: [] };
   } finally { workspace.database.close(); }
 }

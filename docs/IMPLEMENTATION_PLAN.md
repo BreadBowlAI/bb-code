@@ -141,7 +141,7 @@ worktrees(repository_location_id, canonical_root, git_dir)
 git_views(repository_id, worktree_id, commit, tree, parents, patch_id, dirty_fingerprint, changed_paths, branch)
 
 agent_sessions(repository_id, worktree_id, host, external_session_id)
-runs(session, prompt, status, start_view, end_view, verification, finish_called, request_intent, no_durable_learning_reason)
+runs(session, prompt, status, start_view, end_view, verification, finish_called, completion_reason, request_intent, no_durable_learning_reason)
 run_events(run, sequence, kind, external_event_id, git_view, consequential, tool, outcome, paths, sanitized_payload)
 
 statements(repository_id, kind, current_revision_id, created_by)
@@ -191,14 +191,20 @@ The bootstrap skill may inspect repository documents and propose context, but do
 1. Normalize `UserPromptSubmit` (Codex/Claude) or `beforeSubmitPrompt` (Cursor) into `start_run`.
 2. Reconcile repository and Git state.
 3. Create or resume the session and create a run.
-4. Retrieve local FTS candidates and, when enabled, QKV candidates with a 1.2-second timeout.
-5. Filter lexical candidates by meaningful term coverage, select the statistically distinct head of the semantic score distribution, fuse provider ranks and scores with reciprocal rank fusion (`k = 60`), then apply status, scope, ancestry, dirty-worktree, branch, path, freshness, conflict, and near-duplicate policy.
-6. Abstain when lexical coverage is insufficient or semantic scores are flat, and render at most 12 items, 1,200 deterministic tokens, and 4,800 characters.
-7. Log the rendered items and inject the run ID plus the requirement to call `bb_finish_run`. Codex and Claude receive this directly from their prompt hook. Cursor's project rule calls `bb_context` with the exact user prompt; that retrieval binds to the prompt-hook run and returns the same run ID because Cursor's documented pre-prompt response cannot inject context.
+4. Consult the delivery adapter's capability-derived runtime policy. Codex and Claude retrieve immediately because their prompt hooks can inject context. Cursor stops here because `beforeSubmitPrompt` can only allow or block submission.
+5. Cursor's always-applied rule calls `bb_context` exactly once with the exact request; this binds to the prompt-hook run and performs the only retrieval. A normal empty result is success and must not be retried.
+6. Retrieve local FTS candidates and, when enabled, QKV candidates with a 1.2-second timeout.
+7. Filter lexical candidates by meaningful term coverage, select the statistically distinct head of the semantic score distribution, fuse provider ranks and scores with reciprocal rank fusion (`k = 60`), then apply status, scope, ancestry, dirty-worktree, branch, path, freshness, conflict, and near-duplicate policy.
+8. Abstain when lexical coverage is insufficient or semantic scores are flat, and render at most 12 items, 1,200 deterministic tokens, and 4,800 characters.
+9. Log the rendered items and return a compact run contract. The detailed learning rubric remains in the `bb_finish_run` MCP description instead of consuming every context response.
 
 ### Run finish
 
-The agent records outcome, verification, effects, its request-intent disposition, and its explicit learning decision in one transaction. Context effects must reference an item logged for that run. Tool-assisted runs cannot finish with an unexplained empty non-request proposal set; proposals previously submitted through `bb_propose_update` count toward the decision. A Stop hook nudges once whenever `bb_finish_run` was omitted, including read-only or conversational runs, so every request receives an intent disposition. Every proposal enters the candidate ledger, then repository knowledge mode either resolves it in the same transaction or leaves it for human review. Human edits preserve the original proposal separately.
+The agent records outcome, verification, effects, its request-intent disposition, and its explicit learning decision in one transaction. Context effects must reference an item logged for that run. Tool-assisted runs cannot finish with an unexplained empty non-request proposal set; proposals previously submitted through `bb_propose_update` count toward the decision. Every proposal enters the candidate ledger, then repository knowledge mode either resolves it in the same transaction or leaves it for human review. Human edits preserve the original proposal separately.
+
+Completion delivery follows host capability rather than a shared response shape. Codex and Claude can block Stop once with full completion guidance, then finalize a second omission as partial. Cursor receives one short `postToolUse.additional_context` reminder after its first consequential event. Its Stop hook never returns `followup_message`, because Cursor would submit that as a new user request; it immediately finalizes an omission as partial with `completion_reason=missing_finish`. Starting a new generation or ending a session also closes older unfinished runs, preventing orphaned run accumulation.
+
+Path-scoped commitments are likewise translated at the delivery boundary. Hosts with a pre-tool context channel receive context normally. Cursor denies the first applicable tool attempt with `agent_message`, records a deduplicated guidance event, and allows the retry so enforcement cannot loop.
 
 ## Git behavior
 
@@ -215,7 +221,8 @@ Never send raw code, diffs, stored/raw prompts, tool input/output, secrets, envi
 - A repository initializes with only `.bb/repo.json` committed.
 - Intent, belief, and explicitly confirmed commitment creation works.
 - Local context retrieval is useful with QKV disabled.
-- Codex, Claude, and Cursor hooks create runs; Codex and Claude inject prompt context directly, while Cursor retrieves it through the always-applied project rule and exact-request run binding.
+- Codex, Claude, and Cursor hooks create runs; Codex and Claude inject prompt context directly, while Cursor performs one MCP retrieval through the always-applied project rule and exact-request run binding.
+- Cursor injects one hidden post-tool completion reminder, never turns Stop into a synthetic user request, records missing completion structurally, and cannot loop when surfacing path commitments.
 - One before/after pair is retained for each host tool-use ID while duplicate delivery of either phase remains idempotent.
 - MCP exposes exactly the four named tools.
 - `bb_finish_run` records a request-intent disposition and proposals or an explicit no-learning reason for tool-assisted work; configured policy, not the agent tool, resolves proposals.

@@ -50,9 +50,10 @@ describe("verification tool consequences", () => {
         payload: {}
       }, databasePath);
 
-      expect(stop.nudge).toContain("bb_finish_run");
-      expect(stop.nudge).toContain("fallible claim");
-      expect(stop.nudge).toContain("explicit rule, constraint, or chosen decision");
+      expect(stop.effects).toContainEqual(expect.objectContaining({ type: "completion_nudge", content: expect.stringContaining("bb_finish_run") }));
+      const nudge = stop.effects.find((effect) => effect.type === "completion_nudge");
+      expect(nudge?.content).toContain("fallible claim");
+      expect(nudge?.content).toContain("explicit rule, constraint, or chosen decision");
     } finally {
       fixture.dispose();
     }

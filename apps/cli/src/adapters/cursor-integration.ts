@@ -12,13 +12,13 @@ const CURSOR_HOOK_COMMANDS = {
 } as const;
 
 export const CURSOR_RULE = `---
-description: Use reviewed bb-code context and finish active bb-code runs
+description: Use bb-code context and finish active bb-code runs
 alwaysApply: true
 ---
 
-At the start of every coding request, call \`bb_context\` with the user's request and any relevant paths before planning or editing. Treat returned commitments as constraints, beliefs as fallible context, and intents as goals. Report statement IDs through \`contextEffects\` when they materially affect the work.
+At the start of every coding request, call \`bb_context\` exactly once with the user's request and any relevant paths before planning or editing. A normal result, including "No relevant bb-code context was found," is successful; retry only when Cursor reports that the MCP call itself failed. Treat returned commitments as constraints, beliefs as fallible context, and intents as goals. Report statement IDs through \`contextEffects\` when they materially affect the work.
 
-The \`bb_context\` result includes the active run ID when its request exactly matches the current user prompt. Before ending consequential work, call \`bb_finish_run\` with that run ID. Propose only durable knowledge likely to change future work, and never accept a proposal yourself. If there is no useful durable learning, provide a specific \`noDurableLearningReason\`.
+The \`bb_context\` result includes the active run ID when its request exactly matches the current user prompt. Before your final response after tool-assisted work, call \`bb_finish_run\` with that run ID. Propose only durable knowledge likely to change future work; repository knowledge mode resolves proposals. If there is no useful durable learning, provide a specific \`noDurableLearningReason\`.
 `;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -43,7 +43,7 @@ function mergeHook(existing: unknown, command: string, eventName: string): Array
   return [...filtered.map((entry) => {
     if (!isRecord(entry)) throw new Error(`Cursor hook ${eventName} contains an invalid definition`);
     return entry;
-  }), { command, ...(eventName === "stop" ? { loop_limit: 1 } : {}) }];
+  }), { command }];
 }
 
 export async function installCursorProjectIntegration(root: string): Promise<{ hooksPath: string; mcpPath: string; rulePath: string }> {

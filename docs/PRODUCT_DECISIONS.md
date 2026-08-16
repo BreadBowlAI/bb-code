@@ -96,6 +96,14 @@ Trust is more important than maximizing the amount of remembered text.
 - Add Claude Code second to prove the core is host-independent.
 - Add Cursor through its public project hooks, MCP configuration, and rules now
   that its lifecycle surface covers prompts, tools, stop, and sessions.
+- Model host behavior as delivery capabilities, not host names in core policy.
+  Cursor starts a run at `beforeSubmitPrompt`, retrieves once through
+  `bb_context`, injects one terse completion reminder through `postToolUse`, and
+  treats `stop` as an observational boundary. It never uses `followup_message`
+  for bookkeeping because Cursor submits that field as a new user turn.
+- When Cursor first encounters a path-scoped commitment at `preToolUse`, deny
+  that attempt with agent-facing guidance and allow the retry. Persist the
+  guidance claim so the same constraint cannot create a denial loop.
 - Add OpenCode as an adapter/plugin, not a fork, after the two-host MVP.
 - Do not make bb-code the master of Codex or Claude for the MVP.
 - Preserve an owned-runtime option for later through supported SDK or app-server

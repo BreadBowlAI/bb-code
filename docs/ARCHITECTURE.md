@@ -86,6 +86,24 @@ The executable package connects the layers:
 
 Host-native payloads stop at `normalize-hook-event.ts`. The normalized payload intentionally excludes source code, tool bodies, transcripts, and secrets.
 
+### Host capability translation
+
+The application returns host-neutral runtime effects: retrieved context,
+applicable path commitments, a completion reminder, a blocking completion
+nudge, or a missing-completion observation. Delivery adapters translate those
+effects according to documented host capabilities. Core never branches on
+Cursor, Codex, or Claude response schemas.
+
+Cursor cannot inject context from `beforeSubmitPrompt`, and its Stop
+`followup_message` is submitted as a new user turn. Its adapter therefore
+defers retrieval to one `bb_context` call, uses `postToolUse.additional_context`
+for one terse reminder after consequential work, and silently finalizes an
+unfinished Stop as partial. Because `preToolUse` has no non-blocking context
+field, the adapter denies the first attempt that touches a path-scoped
+commitment with agent-facing guidance; a persisted guidance event makes the
+retry non-blocking. Codex and Claude retain prompt-time context injection and a
+single blocking Stop nudge.
+
 ## Runtime flow
 
 ```mermaid
@@ -99,10 +117,15 @@ sequenceDiagram
   Host->>Adapter: UserPromptSubmit
   Adapter->>App: RuntimeEvent(start_run)
   App->>DB: create session + run
-  App->>DB: FTS5 candidates
-  opt QKV enabled
-    App->>QKV: statement-only semantic search
-    QKV-->>App: statement IDs + scores
+  alt host supports prompt context
+    App->>DB: FTS5 candidates
+    opt QKV enabled
+      App->>QKV: statement-only semantic search
+      QKV-->>App: statement IDs + scores
+    end
+  else Cursor defers prompt context
+    Host->>App: bb_context(request)
+    App->>DB: FTS5 candidates
   end
   App->>DB: log fused retrieval
   App-->>Host: cited context + run ID

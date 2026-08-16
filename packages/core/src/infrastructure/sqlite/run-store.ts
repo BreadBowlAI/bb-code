@@ -58,7 +58,7 @@ export class RunStore {
   endSession(host: string, externalSessionId: string): void {
     const database = this.connection.database;
     const timestamp = now();
-    database.prepare("UPDATE runs SET status='abandoned',summary=COALESCE(summary,'Session ended without bb_finish_run'),finished_at=? WHERE status='running' AND agent_session_id IN (SELECT id FROM agent_sessions WHERE host=? AND external_session_id=?)").run(timestamp, host, externalSessionId);
+    database.prepare("UPDATE runs SET status='abandoned',summary=COALESCE(summary,'Session ended without bb_finish_run'),completion_reason='session_ended',finished_at=? WHERE status='running' AND agent_session_id IN (SELECT id FROM agent_sessions WHERE host=? AND external_session_id=?)").run(timestamp, host, externalSessionId);
     database.prepare("UPDATE agent_sessions SET ended_at=? WHERE host=? AND external_session_id=? AND ended_at IS NULL").run(timestamp, host, externalSessionId);
   }
 
@@ -68,6 +68,7 @@ export class RunStore {
       if (input.externalTurnId) {
         const existing = database.prepare("SELECT id FROM runs WHERE agent_session_id=? AND external_turn_id=?").get(input.sessionId, input.externalTurnId) as { id: string } | undefined;
         if (existing) return existing.id;
+        database.prepare("UPDATE runs SET status='partial',summary=COALESCE(summary,'New request started without bb_finish_run'),completion_reason='missing_finish',finished_at=? WHERE agent_session_id=? AND status='running'").run(now(), input.sessionId);
       }
       const id = createId("run");
       database.prepare("INSERT INTO runs(id,agent_session_id,external_turn_id,prompt,status,start_git_view_id,started_at) VALUES(?,?,?,?,?,?,?)").run(id, input.sessionId, input.externalTurnId ?? null, input.prompt, "running", input.gitViewId, now());
@@ -172,17 +173,17 @@ export class RunStore {
         invariant(retrieval, `Statement ${effect.statementId} was not retrieved for run ${input.runId}`, "invalid_context_effect");
         return { effect, retrievalId: retrieval.retrieval_id };
       });
-      database.prepare("UPDATE runs SET status=?,summary=?,verification_json=?,finish_tool_called=1,end_git_view_id=COALESCE(?,end_git_view_id),no_durable_learning_reason=?,request_intent_json=?,finished_at=? WHERE id=?").run(input.outcome, input.summary, toJson(input.verification), input.endGitViewId ?? null, input.noDurableLearningReason ?? null, toJson(input.requestIntent), now(), input.runId);
+      database.prepare("UPDATE runs SET status=?,summary=?,verification_json=?,finish_tool_called=1,end_git_view_id=COALESCE(?,end_git_view_id),no_durable_learning_reason=?,request_intent_json=?,completion_reason='reported',finished_at=? WHERE id=?").run(input.outcome, input.summary, toJson(input.verification), input.endGitViewId ?? null, input.noDurableLearningReason ?? null, toJson(input.requestIntent), now(), input.runId);
       for (const item of effectRows) database.prepare("INSERT INTO context_effects(id,run_id,statement_id,effect,note,created_at,retrieval_id) VALUES(?,?,?,?,?,?,?)").run(`ce_${createId("evt").slice(4)}`, input.runId, item.effect.statementId, item.effect.effect, item.effect.note ?? null, now(), item.retrievalId);
     });
   }
 
-  handleStop(runId: string): "none" | "nudge" | "finalized" {
+  handleStop(runId: string, policy: "nudge_once" | "finalize_partial" = "nudge_once"): "none" | "nudge" | "finalized" {
     const database = this.connection.database;
     const row = database.prepare("SELECT stop_nudge_count,finish_tool_called,status FROM runs WHERE id=?").get(runId) as { stop_nudge_count: number; finish_tool_called: number; status: string } | undefined;
     if (!row || row.finish_tool_called || row.status !== "running") return "none";
-    if (row.stop_nudge_count > 0) {
-      database.prepare("UPDATE runs SET status='partial',summary='Agent ended without bb_finish_run',finished_at=? WHERE id=?").run(now(), runId);
+    if (policy === "finalize_partial" || row.stop_nudge_count > 0) {
+      database.prepare("UPDATE runs SET status='partial',summary='Agent ended without bb_finish_run',completion_reason='missing_finish',finished_at=? WHERE id=?").run(now(), runId);
       return "finalized";
     }
     database.prepare("UPDATE runs SET stop_nudge_count=stop_nudge_count+1 WHERE id=?").run(runId);

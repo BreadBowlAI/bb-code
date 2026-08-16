@@ -99,12 +99,24 @@ const VERSION_6 = `
   INSERT INTO schema_migrations(version, applied_at) VALUES(6, datetime('now'));
 `;
 
+const VERSION_7 = `
+  ALTER TABLE runs ADD COLUMN completion_reason TEXT CHECK(completion_reason IN ('reported','missing_finish','session_ended'));
+  UPDATE runs SET completion_reason=CASE
+    WHEN finish_tool_called=1 THEN 'reported'
+    WHEN status='abandoned' THEN 'session_ended'
+    WHEN status!='running' THEN 'missing_finish'
+    ELSE NULL
+  END;
+  INSERT INTO schema_migrations(version, applied_at) VALUES(7, datetime('now'));
+`;
+
 const MIGRATIONS = [
   { version: 2, sql: VERSION_2 },
   { version: 3, sql: VERSION_3 },
   { version: 4, sql: VERSION_4 },
   { version: 5, sql: VERSION_5 },
-  { version: 6, sql: VERSION_6 }
+  { version: 6, sql: VERSION_6 },
+  { version: 7, sql: VERSION_7 }
 ] as const;
 
 export function migrate(database: DatabaseSync): void {

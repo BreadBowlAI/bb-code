@@ -17,11 +17,11 @@ describe("Cursor project integration", () => {
       const mcp = JSON.parse(await readFile(first.mcpPath, "utf8")) as { mcpServers: Record<string, unknown> };
 
       expect(hooks.hooks.beforeSubmitPrompt).toEqual([{ command: "bb adapter cursor beforeSubmitPrompt" }]);
-      expect(hooks.hooks.stop).toEqual([{ command: "bb adapter cursor stop", loop_limit: 1 }]);
+      expect(hooks.hooks.stop).toEqual([{ command: "bb adapter cursor stop" }]);
       expect(hooks.hooks.afterFileEdit).toEqual([{ command: "format-project" }]);
       expect(mcp.mcpServers["bb-code"]).toEqual({ command: "bb", args: ["mcp", "serve"] });
       expect(mcp.mcpServers.existing).toEqual({ command: "existing-mcp" });
-      expect(await readFile(first.rulePath, "utf8")).toContain("call `bb_context`");
+      expect(await readFile(first.rulePath, "utf8")).toContain("call `bb_context` exactly once");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

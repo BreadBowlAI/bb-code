@@ -21,7 +21,7 @@ Codex / Claude Code / Cursor
                                                           └─> optional QKV
 ```
 
-Hooks provide reliable run timing. MCP gives the agent four explicit operations. Cursor's project rule asks the agent to retrieve bb-code context before work because Cursor's pre-prompt hook starts the run but does not expose a documented context-injection response. The core imports no host-specific or QKV code, so OpenCode and other adapters can be added without changing the domain.
+Hooks provide reliable run timing. MCP gives the agent four explicit operations. Cursor's project rule asks the agent to retrieve bb-code context exactly once because Cursor's pre-prompt hook can start a run but cannot inject context. After the first consequential tool action, Cursor's documented post-tool context channel adds one short, hidden completion reminder. Stop never creates a synthetic user turn: an omitted `bb_finish_run` is recorded as a partial run instead. The core exposes host-neutral effects; delivery adapters map them through declared host capabilities, so OpenCode and other adapters can be added without changing the domain.
 
 ## Quick start
 
