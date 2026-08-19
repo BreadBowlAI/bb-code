@@ -85,6 +85,9 @@ The executable package connects the layers:
 - `cli.ts` only assembles commands; `launcher.ts` handles process startup.
 
 Host-native payloads stop at `normalize-hook-event.ts`. The normalized payload intentionally excludes source code, tool bodies, transcripts, and secrets.
+The same boundary filters bb-code's four MCP tools using each host's native
+tool-name form, so internal retrieval and completion calls never re-enter core
+tool policy as user-work events.
 
 ### Host capability translation
 

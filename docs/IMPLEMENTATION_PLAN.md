@@ -128,7 +128,7 @@ type RuntimeEvent = {
 }
 ```
 
-The core never imports native event types. Adapters ignore bb-code's own MCP namespace to prevent feedback loops. They emit protocol JSON on stdout, diagnostics on stderr, and fail open.
+The core never imports native event types. Adapters recognize and discard bb-code's own MCP lifecycle events—including Cursor names such as `MCP:bb_context` and namespaced forms such as `mcp__bb-code__bb_context`—before normalization. This prevents self-tools from entering path-commitment enforcement, evidence classification, or completion reminders. Adapters emit protocol JSON on stdout, diagnostics on stderr, and fail open.
 
 ## Persistent schema
 

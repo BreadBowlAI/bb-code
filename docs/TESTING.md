@@ -20,6 +20,9 @@ apps/cli/tests/unit/adapters/        native Codex, Claude, and Cursor translatio
 Each `*.test.ts` file owns one behavior and normally one test case. A file name should explain the failure without opening it—for example, `candidate-review.test.ts` or `run-stop-policy.test.ts`.
 
 Unit tests must not open SQLite, execute Git, or use the network. Integration tests may use a temporary real database and must dispose it in `finally`. Transport tests use injected `fetch`; hook-normalization tests call the pure normalizer rather than starting a process. Cursor installation tests use a temporary project directory and verify existing JSON configuration is merged rather than replaced.
+Native self-tool regression coverage includes Cursor's `MCP:bb_context` form,
+ensuring a request containing relevant paths cannot be mistaken for an ordinary
+path-touching tool and blocked by `preToolUse`.
 
 Commands:
 

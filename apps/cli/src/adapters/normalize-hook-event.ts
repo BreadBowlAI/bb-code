@@ -2,6 +2,8 @@ import type { RuntimeEvent } from "@breadbowl/bb-core";
 
 export type Host = "codex" | "claude" | "cursor";
 
+const BB_MCP_TOOL_NAMES = ["bb_context", "bb_explain", "bb_propose_update", "bb_finish_run"] as const;
+
 const EVENT_NAMES: Record<string, RuntimeEvent["event"]> = {
   SessionStart: "session_start",
   UserPromptSubmit: "start_run",
@@ -46,13 +48,27 @@ function batchRecords(payload: Record<string, unknown>): Record<string, unknown>
   return Array.isArray(value) ? value.map(record) : [];
 }
 
+function batchToolName(item: Record<string, unknown>): unknown {
+  return item.tool_name ?? item.toolName ?? item.name;
+}
+
+export function isBbMcpToolName(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase();
+  return BB_MCP_TOOL_NAMES.some((name) => normalized === name || normalized.endsWith(`:${name}`) || normalized.endsWith(`/${name}`) || normalized.endsWith(`__${name}`));
+}
+
 export function normalizeHookEvent(input: { host: Host; nativeEventName: string; payload: Record<string, unknown>; defaultCwd: string; occurredAt?: string }): RuntimeEvent | undefined {
   const event = EVENT_NAMES[input.nativeEventName];
   if (!event) return undefined;
   const payload = input.payload;
+  const nativeToolName = payload.tool_name ?? payload.toolName;
+  if ((event === "before_tool" || event === "after_tool") && isBbMcpToolName(nativeToolName)) return undefined;
   const nativeTurnId = payload.turn_id ?? payload.turnId ?? payload.generation_id;
   const turnId = typeof nativeTurnId === "string" ? nativeTurnId : undefined;
-  const batch = batchRecords(payload);
+  const nativeBatch = batchRecords(payload);
+  const batch = nativeBatch.filter((item) => !isBbMcpToolName(batchToolName(item)));
+  if ((event === "before_tool" || event === "after_tool") && nativeBatch.length > 0 && batch.length === 0) return undefined;
   const batchIds = batch.map((item) => item.tool_use_id ?? item.toolUseId ?? item.id).filter((value): value is string => typeof value === "string");
   const nativeToolUseId = payload.tool_use_id ?? payload.toolUseId ?? payload.batch_id ?? payload.batchId;
   const toolUseId = typeof nativeToolUseId === "string" ? nativeToolUseId : batchIds.length ? `batch:${batchIds.join(",")}` : undefined;
@@ -61,9 +77,9 @@ export function normalizeHookEvent(input: { host: Host; nativeEventName: string;
   const batchPaths = batchInputs
     .flatMap((item) => [item.path, item.file_path, ...(Array.isArray(item.paths) ? item.paths : [])])
     .filter((value): value is string => typeof value === "string");
-  const toolName = payload.tool_name ?? payload.toolName ?? (batch.length ? "Batch" : undefined);
+  const toolName = nativeToolName ?? (batch.length ? "Batch" : undefined);
   const category = verificationCategory(toolName, toolInput)
-    ?? batch.map((item, index) => verificationCategory(item.tool_name ?? item.toolName ?? item.name, batchInputs[index] ?? {})).find(Boolean);
+    ?? batch.map((item, index) => verificationCategory(batchToolName(item), batchInputs[index] ?? {})).find(Boolean);
   const explicitOutcome = payload.outcome ?? payload.exit_code ?? payload.exitCode;
   const batchFailed = batch.some((item) => item.success === false || item.outcome === "failed" || item.error !== undefined);
   const safePayload: Record<string, unknown> = {

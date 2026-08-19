@@ -54,12 +54,6 @@ function pathCommitmentApplies(statement: { scope: { kind: "repository" } | { ki
   return paths.some((path) => path === prefix || path.startsWith(`${prefix}/`) || prefix.startsWith(`${path}/`));
 }
 
-function isBbTool(toolName: string | undefined): boolean {
-  if (!toolName) return false;
-  const normalized = toolName.toLowerCase();
-  return normalized.startsWith("bb_") || normalized.includes("__bb-code__") || normalized.includes("__bb_code__");
-}
-
 function classifyTool(toolName: string | undefined, toolCategory: string | undefined, outcome: string | undefined, changedPaths: string[]): { consequential: boolean; evidenceKind?: string; evidenceSummary?: string } {
   const name = toolName?.toLowerCase() ?? "tool";
   const failed = Boolean(outcome && !["0", "ok", "success", "passed", "completed"].includes(outcome.toLowerCase()));
@@ -110,7 +104,6 @@ export async function processRuntimeEvent(
   if (event.event === "before_tool" || event.event === "after_tool") {
     const toolName = stringValue(event.payload.tool_name) ?? stringValue(event.payload.toolName);
     const toolCategory = stringValue(event.payload.tool_category);
-    if (isBbTool(toolName)) return { runId, effects: [] };
     const outcome = stringValue(event.payload.outcome);
     const inputPaths = payloadPaths(workspace.root, event.payload);
     let paths = inputPaths;
