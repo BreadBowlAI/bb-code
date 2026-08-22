@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { StatementReferenceSchema } from "./ids.js";
 
 export const StatementKindSchema = z.enum(["intent", "belief", "commitment"]);
 export type StatementKind = z.infer<typeof StatementKindSchema>;
@@ -105,7 +106,7 @@ const ReclassifyCandidateProposalSchema = z.discriminatedUnion("kind", [
   z.object({
     operation: z.literal("reclassify"),
     kind: z.literal("intent"),
-    targetStatementId: z.string().min(1),
+    targetStatementId: StatementReferenceSchema,
     body: z.string().min(1).optional(),
     scope: ScopeSchema.optional(),
     attributes: IntentAttributesSchema,
@@ -115,7 +116,7 @@ const ReclassifyCandidateProposalSchema = z.discriminatedUnion("kind", [
   z.object({
     operation: z.literal("reclassify"),
     kind: z.literal("belief"),
-    targetStatementId: z.string().min(1),
+    targetStatementId: StatementReferenceSchema,
     body: z.string().min(1).optional(),
     scope: ScopeSchema.optional(),
     attributes: BeliefAttributesSchema,
@@ -124,7 +125,7 @@ const ReclassifyCandidateProposalSchema = z.discriminatedUnion("kind", [
   z.object({
     operation: z.literal("reclassify"),
     kind: z.literal("commitment"),
-    targetStatementId: z.string().min(1),
+    targetStatementId: StatementReferenceSchema,
     body: z.string().min(1).optional(),
     scope: ScopeSchema.optional(),
     attributes: CommitmentAttributesSchema,
@@ -135,7 +136,7 @@ const ReclassifyCandidateProposalSchema = z.discriminatedUnion("kind", [
 const ExistingStatementCandidateProposalSchema = z.object({
   operation: z.enum(["revise", "confirm", "contradict", "satisfy", "abandon", "supersede", "retire"]),
   kind: StatementKindSchema.optional(),
-  targetStatementId: z.string().min(1).describe("Existing bb-code statement ID. Call bb_explain first when its kind or current attributes are uncertain."),
+  targetStatementId: StatementReferenceSchema.describe("Existing bb-code statement ID. Raw IDs and rendered citations are accepted. Call bb_explain first when its kind or current attributes are uncertain."),
   body: z.string().min(1).optional(),
   scope: ScopeSchema.optional(),
   attributes: z.union([IntentAttributesSchema, BeliefAttributesSchema, CommitmentAttributesSchema]).optional().describe("When revising attributes, provide the complete kind-specific attributes object returned by bb_explain."),

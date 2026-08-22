@@ -10,7 +10,7 @@ describe("migration idempotency", () => {
     try {
       const reopened = new BbDatabase(filename);
       try {
-        expect(reopened.health()).toMatchObject({ schemaVersion: 7, journalMode: "wal", foreignKeys: true });
+        expect(reopened.health()).toMatchObject({ schemaVersion: 8, journalMode: "wal", foreignKeys: true });
         expect(reopened.knowledgePolicy(fixture.repositoryId).mode).toBe("standard");
       }
       finally { reopened.close(); }

@@ -44,6 +44,12 @@ The acceptance command exercises the default-standard Codex → auto-accepted be
 
 Focused learning-loop tests cover completed request intents, read-only diagnostic decisions, quiet-run Stop nudges, Cursor's deferred single retrieval, hidden one-time completion reminder, silent missing-finish finalization, non-looping path guidance, review-time kind correction, and atomic statement reclassification. Retrieval hard negatives must include real dogfood failures: generic word overlap must abstain, and a flat semantic score distribution must not inject arbitrary context.
 
+Commitment reconciliation tests cover the stale-constraint failure directly:
+all retrieved commitments require one disposition, yolo transitions are atomic,
+standard-mode transitions remain pending and are removed from hard path
+enforcement, decorated citations normalize to raw IDs, and focused Cursor
+lookups bind explicitly to the active run.
+
 CI runs functional checks on macOS and Linux with Node 24. The normal test suite already includes the acceptance flow, so CI does not run that subset twice. Performance thresholds remain a local release check because shared-runner timing is not stable enough for a deterministic gate. Live QKV is a separate manually dispatched workflow protected by dedicated tenant credentials; it upserts a synthetic document, searches, and deletes it. Normal tests inject transport fakes, verify the server's documents-array and partial-failure contract, and assert that private run data never reaches remote documents. The final consequential-recall release proof is a real dogfood observation and cannot be replaced by the deterministic acceptance fixture.
 
 `pnpm check:architecture` enforces the core dependency direction and rejects tests placed under production source.

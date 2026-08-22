@@ -110,13 +110,30 @@ const VERSION_7 = `
   INSERT INTO schema_migrations(version, applied_at) VALUES(7, datetime('now'));
 `;
 
+const VERSION_8 = `
+  CREATE TABLE commitment_reconciliations(
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES runs(id),
+    statement_id TEXT NOT NULL REFERENCES statements(id),
+    retrieval_id TEXT NOT NULL REFERENCES retrievals(id),
+    disposition TEXT NOT NULL CHECK(disposition IN ('preserved','revised','superseded','retired','pending')),
+    reason TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(run_id, statement_id)
+  );
+  CREATE INDEX commitment_reconciliations_statement
+    ON commitment_reconciliations(statement_id, created_at DESC);
+  INSERT INTO schema_migrations(version, applied_at) VALUES(8, datetime('now'));
+`;
+
 const MIGRATIONS = [
   { version: 2, sql: VERSION_2 },
   { version: 3, sql: VERSION_3 },
   { version: 4, sql: VERSION_4 },
   { version: 5, sql: VERSION_5 },
   { version: 6, sql: VERSION_6 },
-  { version: 7, sql: VERSION_7 }
+  { version: 7, sql: VERSION_7 },
+  { version: 8, sql: VERSION_8 }
 ] as const;
 
 export function migrate(database: DatabaseSync): void {

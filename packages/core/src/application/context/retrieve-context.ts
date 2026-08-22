@@ -45,6 +45,7 @@ export async function retrieveContext(input: {
     } catch { /* A remote ID is never authoritative. */ }
   }
   const applicability = await resolveApplicability({ database: input.database, repositoryId: input.repositoryId, gitViewId: input.gitViewId, git: input.git, statements: [...candidates.values()], paths, query: input.query });
+  const unresolvedCommitments = input.database.unresolvedCommitmentTransitionIds(input.repositoryId, [...candidates.keys()]);
   const conflicts = input.database.conflictingStatementIds(input.repositoryId, [...candidates.keys()]);
   for (const statement of candidates.values()) if (input.database.hasContradictoryEvidence(statement.id)) conflicts.add(statement.id);
   const ranked = rankContext({
@@ -58,7 +59,10 @@ export async function retrieveContext(input: {
     conflicts,
     paths,
     maxItems: Math.min(Math.max(input.maxItems ?? 12, 1), 12)
-  });
+  }).map((item) => item.conflict ? {
+    ...item,
+    conflictReason: unresolvedCommitments.has(item.id) ? "pending_commitment_reconciliation" as const : "contradictory_evidence" as const
+  } : item);
   const rendered = renderContextResult(ranked, input.runId);
   const retrievalId = input.database.logRetrieval({ repositoryId: input.repositoryId, ...(input.runId ? { runId: input.runId } : {}), gitViewId: input.gitViewId, query: input.query, paths, providerStatus, renderedTokenCount: rendered.tokenCount, items: rendered.items });
   return { retrievalId, ...(input.runId ? { runId: input.runId } : {}), items: rendered.items, rendered: rendered.rendered, conflicts: rendered.conflicts, providerStatus };

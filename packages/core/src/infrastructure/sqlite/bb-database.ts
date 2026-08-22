@@ -1,8 +1,8 @@
 import type { ContextItem } from "../../domain/context.js";
 import { invariant } from "../../domain/errors.js";
 import { shouldAutoAcceptProposal, type ActorRef, type CandidateProposal, type CurrentStatement, type KnowledgeMode, type StatementDraft } from "../../domain/knowledge.js";
-import type { GitView, RequestIntentDecision } from "../../domain/runtime.js";
-import { KnowledgeStore, type CandidateRecord, type EvidenceAnchor, type QkvIndexDocument } from "./knowledge-store.js";
+import { CommitmentReconciliationSchema, type CommitmentReconciliation, type GitView, type RequestIntentDecision } from "../../domain/runtime.js";
+import { KnowledgeStore, type CandidateRecord, type EvidenceAnchor, type QkvIndexDocument, type StatementExplanation } from "./knowledge-store.js";
 import { RepositoryStore, type RepositoryRegistration, type KnownWorktree } from "./repository-store.js";
 import { RunStore, type FinishRunRecord, type RunEventInput } from "./run-store.js";
 import { SearchStore } from "./search-store.js";
@@ -41,6 +41,8 @@ export class BbDatabase {
   startRun(input: Parameters<RunStore["startRun"]>[0]): string { return this.runs.startRun(input); }
   latestRunningRun(host: string, externalSessionId: string): string | undefined { return this.runs.latestRunningRun(host, externalSessionId); }
   latestRunningRunForRequest(repositoryId: string, worktreeId: string, prompt: string): string | undefined { return this.runs.latestRunningRunForRequest(repositoryId, worktreeId, prompt); }
+  runBelongsToRepository(runId: string, repositoryId: string): boolean { return this.runs.belongsToRepository(runId, repositoryId); }
+  isRunRunning(runId: string): boolean { return this.runs.isRunning(runId); }
   addRunEvent(runId: string, event: RunEventInput): boolean { return this.runs.addEvent(runId, event); }
   finishRun(input: FinishRunRecord): void { this.runs.finish(input); }
   handleStop(runId: string, policy?: Parameters<RunStore["handleStop"]>[1]): "none" | "nudge" | "finalized" { return this.runs.handleStop(runId, policy); }
@@ -54,7 +56,7 @@ export class BbDatabase {
   getStatement(id: string, repositoryId?: string): CurrentStatement { return this.knowledge.getStatement(id, repositoryId); }
   listStatements(repositoryId: string): CurrentStatement[] { return this.knowledge.listStatements(repositoryId); }
   audit(repositoryId: string): { policy: ReturnType<RepositoryStore["knowledgePolicy"]>; knowledge: ReturnType<KnowledgeStore["audit"]>; learning: ReturnType<RunStore["learningMetrics"]> } { return { policy: this.repositories.knowledgePolicy(repositoryId), knowledge: this.knowledge.audit(repositoryId), learning: this.runs.learningMetrics(repositoryId) }; }
-  explainStatement(id: string): { current: CurrentStatement; history: Array<Record<string, unknown>> } { return this.knowledge.explainStatement(id); }
+  explainStatement(id: string): StatementExplanation { return this.knowledge.explainStatement(id); }
   propose(repositoryId: string, runId: string | undefined, input: CandidateProposal, gitViewId?: string): string { return this.proposeWithPolicy(repositoryId, runId, input, gitViewId); }
   listCandidates(repositoryId: string, state = "pending"): CandidateRecord[] { return this.knowledge.listCandidates(repositoryId, state); }
   resolveCandidate(id: string, decision: "accept" | "reject" | "defer", actor: ActorRef, note?: string, editedProposal?: CandidateProposal): CurrentStatement | undefined { return this.knowledge.resolveCandidate(id, decision, actor, note, editedProposal); }
@@ -70,6 +72,8 @@ export class BbDatabase {
   }
   hasContradictoryEvidence(statementId: string): boolean { return this.knowledge.hasContradictoryEvidence(statementId); }
   conflictingStatementIds(repositoryId: string, statementIds: string[]): Set<string> { return this.knowledge.conflictingStatementIds(repositoryId, statementIds); }
+  unresolvedCommitmentTransitionIds(repositoryId: string, statementIds?: string[]): Set<string> { return this.knowledge.unresolvedCommitmentTransitionIds(repositoryId, statementIds); }
+  isCommitmentQuarantined(repositoryId: string, statementId: string): boolean { return this.knowledge.unresolvedCommitmentTransitionIds(repositoryId, [statementId]).has(statementId); }
   indexDocument(statementId: string): QkvIndexDocument | undefined { return this.knowledge.indexDocument(statementId); }
   listIndexDocuments(repositoryId: string): QkvIndexDocument[] { return this.knowledge.listIndexDocuments(repositoryId); }
 
@@ -81,6 +85,7 @@ export class BbDatabase {
       invariant(this.knowledge.getStatement(requestProposal.targetStatementId, repositoryId).kind === "intent", "requestIntent lifecycle proposals must target an intent", "invalid_request_intent");
     }
     const proposals = input.proposals.map((proposal) => this.knowledge.validateProposal(repositoryId, proposal));
+    const reconciliations = (input.reconciliations ?? []).map((item) => CommitmentReconciliationSchema.parse(item));
     if (requestProposal) {
       const encoded = JSON.stringify(requestProposal);
       invariant(!proposals.some((proposal) => JSON.stringify(proposal) === encoded), "Do not repeat the requestIntent proposal in proposals", "duplicate_request_intent");
@@ -88,9 +93,10 @@ export class BbDatabase {
     const noDurableLearningReason = input.noDurableLearningReason?.trim();
     const hasLearningDecision = proposals.length > 0 || this.knowledge.hasCandidatesForRun(input.runId) || Boolean(noDurableLearningReason);
     invariant(!this.runs.hasToolEvents(input.runId) || hasLearningDecision, `Tool-assisted run ${input.runId} must include a proposal or noDurableLearningReason explaining why no durable project knowledge was learned`, "missing_learning_decision");
+    this.validateCommitmentReconciliations(repositoryId, input.runId, reconciliations, proposals);
     return this.connection.transaction(() => {
       const candidateIds = [...(requestProposal ? [requestProposal] : []), ...proposals].map((proposal) => this.proposeWithPolicy(repositoryId, input.runId, proposal, input.proposalGitViewId ?? input.endGitViewId));
-      this.runs.finish({ ...input, ...(noDurableLearningReason ? { noDurableLearningReason } : {}) });
+      this.runs.finish({ ...input, reconciliations, ...(noDurableLearningReason ? { noDurableLearningReason } : {}) });
       return candidateIds;
     });
   }
@@ -136,6 +142,49 @@ export class BbDatabase {
     if (!shouldAutoAcceptProposal(mode, proposal, targetKind)) return;
     const actor: ActorRef = { kind: "agent", id: "bb-code-auto-accept", label: `bb-code ${mode} mode` };
     this.knowledge.resolveCandidate(candidateId, "accept", actor, `Automatically accepted by repository knowledge mode: ${mode}`, undefined, "auto_accepted");
+  }
+
+  private validateCommitmentReconciliations(repositoryId: string, runId: string, reconciliations: CommitmentReconciliation[], proposals: CandidateProposal[]): void {
+    const retrieved = this.runs.retrievedCommitments(runId);
+    const requiredIds = new Set(retrieved.map((item) => item.statementId));
+    const seen = new Set<string>();
+    for (const reconciliation of reconciliations) {
+      invariant(!seen.has(reconciliation.statementId), `Commitment ${reconciliation.statementId} was reconciled more than once`, "duplicate_commitment_reconciliation");
+      invariant(requiredIds.has(reconciliation.statementId), `Commitment ${reconciliation.statementId} was not retrieved for run ${runId}`, "invalid_commitment_reconciliation");
+      seen.add(reconciliation.statementId);
+    }
+    for (const statementId of requiredIds) invariant(seen.has(statementId), `Retrieved commitment ${statementId} requires a commitmentReconciliations entry`, "missing_commitment_reconciliation");
+
+    const existing = this.knowledge.lifecycleCandidatesForRun(runId).filter((candidate) => candidate.state !== "rejected");
+    const incoming = proposals.flatMap((proposal) => {
+      if (proposal.operation === "revise" || proposal.operation === "supersede" || proposal.operation === "retire" || proposal.operation === "reclassify") {
+        return [{ statementId: proposal.targetStatementId, operation: proposal.operation, state: "incoming" }];
+      }
+      return [];
+    });
+    const transitions = [...existing, ...incoming];
+    const unresolved = this.knowledge.unresolvedCommitmentTransitionIds(repositoryId);
+    const expectedOperation: Record<CommitmentReconciliation["disposition"], string | undefined> = {
+      preserved: undefined,
+      revised: "revise",
+      superseded: "supersede",
+      retired: "retire",
+      pending: undefined
+    };
+    for (const reconciliation of reconciliations) {
+      const matching = transitions.filter((candidate) => candidate.statementId === reconciliation.statementId);
+      if (reconciliation.disposition === "preserved") {
+        invariant(matching.length === 0 && !unresolved.has(reconciliation.statementId), `Commitment ${reconciliation.statementId} has a lifecycle proposal and cannot be marked preserved`, "invalid_commitment_reconciliation");
+        continue;
+      }
+      if (reconciliation.disposition === "pending") {
+        invariant(unresolved.has(reconciliation.statementId), `Commitment ${reconciliation.statementId} has no unresolved human review`, "invalid_commitment_reconciliation");
+        continue;
+      }
+      const operation = expectedOperation[reconciliation.disposition];
+      const hasMatchingTransition = matching.some((candidate) => candidate.operation === operation || (reconciliation.disposition === "superseded" && candidate.operation === "reclassify"));
+      invariant(hasMatchingTransition, `Commitment ${reconciliation.statementId} marked ${reconciliation.disposition} requires a matching lifecycle proposal in this run`, "invalid_commitment_reconciliation");
+    }
   }
 }
 

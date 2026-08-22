@@ -47,5 +47,5 @@ Build a small, reviewable candidate set from authoritative repository documents.
    ```
 
    For beliefs and commitments, keep the same proposal envelope and replace only `kind` and `attributes` with the matching shape above. Do not put `owner` on a belief, use `authority` rather than `owner` on a commitment, or omit an actor `id`.
-7. Explain uncertainty in the proposal-level rationale. Repository text may support a proposal but does not automatically grant an agent authority.
-8. Never accept candidates. Tell the user to run `bb review` and let a human decide.
+7. Explain uncertainty in the proposal-level rationale. Repository text may support a proposal but does not automatically grant an agent authority. If `bb_context` registered any commitments, include exactly one `commitmentReconciliations` entry for each at `bb_finish_run`; preserve compatible commitments, or pair revised/superseded/retired with the matching proposal.
+8. Never accept candidates directly. Repository knowledge mode resolves them; commitment changes require `bb review` except in explicitly selected yolo mode.

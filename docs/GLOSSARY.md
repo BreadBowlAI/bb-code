@@ -133,12 +133,15 @@ agent operations, while hooks decide when integration code runs.
 ### `bb_context`
 
 Retrieves the small set of currently applicable statements for a request and
-optional paths.
+optional paths. The initial exact-request call may bind to the prompt-created
+run automatically; focused follow-up calls pass that `runId` explicitly. Its
+rendered result lists raw statement IDs registered to the run.
 
 ### `bb_explain`
 
 Returns a statement with its current revision, history, scope, and evidence so
-the agent or user can understand why it applies.
+the agent or user can understand why it applies. For commitments it also
+returns the run-linked reconciliation history.
 
 ### `bb_propose_update`
 
@@ -148,8 +151,17 @@ automatically; the agent has no acceptance tool.
 ### `bb_finish_run`
 
 The structured end-of-run boundary. It records outcome, summary, verification,
-context effects, a request-intent disposition, and zero or more proposals. The
-repository policy, rather than the MCP caller, resolves those proposals.
+context effects, commitment reconciliations, a request-intent disposition, and
+zero or more proposals. The repository policy, rather than the MCP caller,
+resolves those proposals.
+
+### Commitment reconciliation
+
+The required end-of-run disposition for every commitment retrieved into that
+run: preserved, revised, superseded, retired, or pending. A lifecycle change
+must point to the matching candidate proposal. Pending means human review is
+already unresolved; it quarantines hard enforcement without changing the
+accepted revision.
 
 ### Request-intent disposition
 

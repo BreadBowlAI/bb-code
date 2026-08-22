@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { CandidateProposalSchema, CONTEXT_EFFECT_GUIDANCE, ContextEffectSchema, DURABLE_LEARNING_RUBRIC, RequestIntentDecisionSchema, VerificationSchema, finishRun, getContext, openWorkspace, proposeUpdate } from "@breadbowl/bb-core";
+import { CandidateProposalSchema, COMMITMENT_RECONCILIATION_GUIDANCE, CommitmentReconciliationSchema, CONTEXT_EFFECT_GUIDANCE, ContextEffectSchema, DURABLE_LEARNING_RUBRIC, RequestIntentDecisionSchema, StatementReferenceSchema, VerificationSchema, finishRun, getContext, openWorkspace, proposeUpdate } from "@breadbowl/bb-core";
 import { configuredSemantic } from "../composition/semantic-provider.js";
 
 function result(value: unknown) {
@@ -21,16 +21,16 @@ export function createMcpServer(): McpServer {
   const server = new McpServer({ name: "bb-code", version: "0.1.0" });
   server.registerTool(MCP_TOOL_NAMES[0], {
     title: "Retrieve bb-code context",
-    description: "Retrieve applicable project intents, beliefs, and commitments for a coding request.",
-    inputSchema: { request: z.string().min(1), paths: z.array(z.string()).optional(), maxItems: z.number().int().min(1).max(12).optional() }
-  }, async ({ request, paths, maxItems }) => {
+    description: "Retrieve applicable project intents, beliefs, and commitments for a coding request. Pass the active runId for focused follow-up lookups; omit it only for the initial exact-request lookup that binds to the prompt-created run.",
+    inputSchema: { request: z.string().min(1), paths: z.array(z.string()).optional(), maxItems: z.number().int().min(1).max(12).optional(), runId: z.string().min(1).optional() }
+  }, async ({ request, paths, maxItems, runId }) => {
     const semantic = await configuredSemantic(process.cwd());
-    return result((await getContext({ cwd: process.cwd(), request, ...(paths ? { paths } : {}), ...(maxItems ? { maxItems } : {}), ...(semantic ? { semantic } : {}) })).rendered);
+    return result((await getContext({ cwd: process.cwd(), request, ...(paths ? { paths } : {}), ...(maxItems ? { maxItems } : {}), ...(runId ? { runId } : {}), ...(semantic ? { semantic } : {}) })).rendered);
   });
   server.registerTool(MCP_TOOL_NAMES[1], {
     title: "Explain a statement",
     description: "Show the current revision, scope, status, and evidence-bearing identity of one statement.",
-    inputSchema: { statementId: z.string().min(1) }
+    inputSchema: { statementId: StatementReferenceSchema }
   }, async ({ statementId }) => {
     const workspace = await openWorkspace(process.cwd());
     try { return result(workspace.database.explainStatement(statementId)); }
@@ -43,8 +43,8 @@ export function createMcpServer(): McpServer {
   }, async ({ runId, proposal }) => result({ candidateId: await proposeUpdate(process.cwd(), runId, proposal) }));
   server.registerTool(MCP_TOOL_NAMES[3], {
     title: "Finish a bb-code run",
-    description: `Record the run outcome, verification, request-intent disposition, context effects, and knowledge proposals at the learning boundary. Repository policy resolves each proposal. Any tool-assisted run with no non-request proposals must explain why it produced no durable learning. ${CONTEXT_EFFECT_GUIDANCE} ${PROPOSAL_GUIDANCE}`,
-    inputSchema: { runId: z.string().min(1), outcome: z.enum(["completed", "partial", "blocked", "failed"]), summary: z.string().min(1), verification: z.array(VerificationSchema).default([]), contextEffects: z.array(ContextEffectSchema).default([]), requestIntent: RequestIntentDecisionSchema, proposals: z.array(CandidateProposalSchema).default([]), noDurableLearningReason: z.string().trim().min(1).optional() }
+    description: `Record the run outcome, verification, request-intent disposition, commitment reconciliation, context effects, and knowledge proposals at the learning boundary. Repository policy resolves each proposal. Any tool-assisted run with no non-request proposals must explain why it produced no durable learning. ${CONTEXT_EFFECT_GUIDANCE} ${COMMITMENT_RECONCILIATION_GUIDANCE} ${PROPOSAL_GUIDANCE}`,
+    inputSchema: { runId: z.string().min(1), outcome: z.enum(["completed", "partial", "blocked", "failed"]), summary: z.string().min(1), verification: z.array(VerificationSchema).default([]), contextEffects: z.array(ContextEffectSchema).default([]), commitmentReconciliations: z.array(CommitmentReconciliationSchema).default([]), requestIntent: RequestIntentDecisionSchema, proposals: z.array(CandidateProposalSchema).default([]), noDurableLearningReason: z.string().trim().min(1).optional() }
   }, async (input) => result(await finishRun(process.cwd(), input)));
   return server;
 }

@@ -8,7 +8,7 @@ The schema has five groups:
 - Agent execution: `agent_sessions`, `runs`, and ordered `run_events`.
 - Knowledge: `statements`, immutable `statement_revisions`, `evidence`, evidence paths, and revision/evidence links.
 - Governance: repository knowledge mode plus `candidate_updates`, whose state is `pending`, `accepted`, `auto_accepted`, `edited`, `rejected`, or `deferred`.
-- Retrieval and evaluation: current search documents, FTS5, provider state/jobs, logged retrievals/items, and context effects.
+- Retrieval and evaluation: current search documents, FTS5, provider state/jobs, logged retrievals/items, context effects, and commitment reconciliations.
 
 Every statement has a kind-specific status and attributes. “Proposed” is never a statement status because proposals are separate records. `current_revision_id` is the only mutable knowledge pointer. Accepting a candidate appends a revision and advances that pointer in one transaction.
 
@@ -28,5 +28,15 @@ Migration v7 adds `runs.completion_reason`. Structured completion records
 stored as a deduplicated `run_events` entry, allowing adapters to issue a
 one-time reminder or path-commitment notice without adding host-specific state
 to the domain.
+
+Migration v8 adds `commitment_reconciliations`. Each row links one finished run,
+one commitment, and the retrieval that actually supplied it, then records the
+agent's explicit `preserved`, `revised`, `superseded`, `retired`, or `pending`
+disposition and reason. A unique `(run_id, statement_id)` constraint makes the
+finish contract auditable and prevents double reconciliation. Candidate state
+continues to record whether a requested transition is pending, manually
+accepted, or automatically accepted; the reconciliation table does not grant
+authority. `bb explain` reads this history alongside immutable revisions and
+evidence.
 
 SQLite uses WAL, foreign keys, normal synchronous mode, and a five-second busy timeout. IDs are ULIDs with readable prefixes such as `repo_`, `run_`, `bel_`, and `com_`.

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { invariant } from "../../domain/errors.js";
-import { createId } from "../../domain/ids.js";
-import type { RequestIntentDecision } from "../../domain/runtime.js";
+import { createId, normalizeStatementReference } from "../../domain/ids.js";
+import type { CommitmentReconciliation, RequestIntentDecision } from "../../domain/runtime.js";
 import type { SqliteConnection } from "./connection.js";
 import { now, toJson } from "./values.js";
 
@@ -28,6 +28,7 @@ export type FinishRunRecord = {
   summary: string;
   verification: unknown[];
   effects: Array<{ statementId: string; effect: string; note?: string }>;
+  reconciliations?: CommitmentReconciliation[];
   requestIntent: RequestIntentDecision;
   endGitViewId?: string;
   noDurableLearningReason?: string;
@@ -95,6 +96,19 @@ export class RunStore {
 
   isRunning(runId: string): boolean {
     return Boolean(this.connection.database.prepare("SELECT 1 FROM runs WHERE id=? AND status='running'").get(runId));
+  }
+
+  retrievedCommitments(runId: string): Array<{ statementId: string; retrievalId: string }> {
+    const rows = this.connection.database.prepare(`SELECT ri.statement_id,r.id AS retrieval_id
+      FROM retrievals r
+      JOIN retrieval_items ri ON ri.retrieval_id=r.id
+      JOIN statements s ON s.id=ri.statement_id
+      JOIN statement_revisions sr ON sr.id=ri.revision_id
+      WHERE r.run_id=? AND s.kind='commitment' AND sr.status='accepted'
+      ORDER BY r.created_at DESC,ri.rank`).all(runId) as Array<{ statement_id: string; retrieval_id: string }>;
+    const unique = new Map<string, string>();
+    for (const row of rows) if (!unique.has(row.statement_id)) unique.set(row.statement_id, row.retrieval_id);
+    return [...unique].map(([statementId, retrievalId]) => ({ statementId, retrievalId }));
   }
 
   hasConsequentialEvents(runId: string): boolean {
@@ -168,13 +182,22 @@ export class RunStore {
     invariant(this.isRunning(input.runId), `Running run ${input.runId} was not found`, "invalid_run");
     this.connection.transaction(() => {
       const effectRows = input.effects.map((effect) => {
+        const statementId = normalizeStatementReference(effect.statementId);
         const retrieval = database.prepare(`SELECT ri.retrieval_id FROM retrieval_items ri JOIN retrievals r ON r.id=ri.retrieval_id
-          WHERE r.run_id=? AND ri.statement_id=? ORDER BY r.created_at DESC LIMIT 1`).get(input.runId, effect.statementId) as { retrieval_id: string } | undefined;
-        invariant(retrieval, `Statement ${effect.statementId} was not retrieved for run ${input.runId}`, "invalid_context_effect");
-        return { effect, retrievalId: retrieval.retrieval_id };
+          WHERE r.run_id=? AND ri.statement_id=? ORDER BY r.created_at DESC LIMIT 1`).get(input.runId, statementId) as { retrieval_id: string } | undefined;
+        invariant(retrieval, `Statement ${statementId} was not retrieved for run ${input.runId}`, "invalid_context_effect");
+        return { effect: { ...effect, statementId }, retrievalId: retrieval.retrieval_id };
+      });
+      const retrievedCommitments = new Map(this.retrievedCommitments(input.runId).map((item) => [item.statementId, item.retrievalId]));
+      const reconciliationRows = (input.reconciliations ?? []).map((reconciliation) => {
+        const statementId = normalizeStatementReference(reconciliation.statementId);
+        const retrievalId = retrievedCommitments.get(statementId);
+        invariant(retrievalId, `Commitment ${statementId} was not retrieved for run ${input.runId}`, "invalid_commitment_reconciliation");
+        return { reconciliation: { ...reconciliation, statementId }, retrievalId };
       });
       database.prepare("UPDATE runs SET status=?,summary=?,verification_json=?,finish_tool_called=1,end_git_view_id=COALESCE(?,end_git_view_id),no_durable_learning_reason=?,request_intent_json=?,completion_reason='reported',finished_at=? WHERE id=?").run(input.outcome, input.summary, toJson(input.verification), input.endGitViewId ?? null, input.noDurableLearningReason ?? null, toJson(input.requestIntent), now(), input.runId);
       for (const item of effectRows) database.prepare("INSERT INTO context_effects(id,run_id,statement_id,effect,note,created_at,retrieval_id) VALUES(?,?,?,?,?,?,?)").run(`ce_${createId("evt").slice(4)}`, input.runId, item.effect.statementId, item.effect.effect, item.effect.note ?? null, now(), item.retrievalId);
+      for (const item of reconciliationRows) database.prepare("INSERT INTO commitment_reconciliations(id,run_id,statement_id,retrieval_id,disposition,reason,created_at) VALUES(?,?,?,?,?,?,?)").run(`cr_${createId("evt").slice(4)}`, input.runId, item.reconciliation.statementId, item.retrievalId, item.reconciliation.disposition, item.reconciliation.reason, now());
     });
   }
 

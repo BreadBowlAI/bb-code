@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { StatementReferenceSchema } from "./ids.js";
 import { CandidateProposalSchema } from "./knowledge.js";
 
 export const VerificationSchema = z.object({
@@ -11,11 +12,18 @@ export const VerificationSchema = z.object({
 export type Verification = z.infer<typeof VerificationSchema>;
 
 export const ContextEffectSchema = z.object({
-  statementId: z.string().min(1),
+  statementId: StatementReferenceSchema,
   effect: z.enum(["changed_plan", "caused_clarification", "avoided_violation", "changed_verification", "no_effect"]),
   note: z.string().min(1).optional()
 });
 export type ContextEffect = z.infer<typeof ContextEffectSchema>;
+
+export const CommitmentReconciliationSchema = z.object({
+  statementId: StatementReferenceSchema,
+  disposition: z.enum(["preserved", "revised", "superseded", "retired", "pending"]),
+  reason: z.string().trim().min(1)
+}).describe("The run's explicit treatment of one retrieved commitment. A lifecycle disposition requires the matching proposal; pending requires an unresolved human review.");
+export type CommitmentReconciliation = z.infer<typeof CommitmentReconciliationSchema>;
 
 export const RequestIntentDecisionSchema = z.discriminatedUnion("disposition", [
   z.object({
@@ -44,6 +52,7 @@ export const FinishRunInputSchema = z.object({
   summary: z.string().min(1),
   verification: z.array(VerificationSchema).default([]),
   contextEffects: z.array(ContextEffectSchema).default([]),
+  commitmentReconciliations: z.array(CommitmentReconciliationSchema).default([]),
   requestIntent: RequestIntentDecisionSchema,
   proposals: z.array(CandidateProposalSchema).default([]),
   noDurableLearningReason: z.string().trim().min(1).optional()

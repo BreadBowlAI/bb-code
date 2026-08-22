@@ -294,11 +294,13 @@ bb_propose_update
 bb_finish_run
 ```
 
-- `bb_context` returns relevant current statements for a request or path.
+- `bb_context` returns relevant current statements for a request or path. Its
+  optional run ID binds focused follow-up retrievals to the active run.
 - `bb_explain` hydrates a statement, its revisions, and its evidence.
 - `bb_propose_update` creates a candidate; repository knowledge mode resolves it, and the agent has no direct acceptance control.
-- `bb_finish_run` records the run outcome, verification, context effects, and
-  zero or more final candidate updates. Its candidates follow the same repository knowledge mode.
+- `bb_finish_run` records the run outcome, verification, context effects,
+  reconciliation for every retrieved commitment, and zero or more final
+  candidate updates. Its candidates follow the same repository knowledge mode.
 
 `bb_finish_run` is the reliable end-of-run learning boundary. The active
 coding agent uses its existing reasoning to submit structured learning; bb-code
@@ -503,14 +505,22 @@ outcome: completed | partial | blocked | failed
 summary
 verification results
 which retrieved statements affected the work
+how every retrieved commitment was preserved or transitioned
 zero or more candidate updates
 ```
+
+Commitment reconciliation is explicit rather than inferred from code drift. A
+preserved commitment remains authoritative. A revise, supersede, or retire
+disposition must carry the matching proposal. Strict and standard modes leave
+commitment transitions for review and quarantine the disputed statement from
+hard enforcement; yolo mode applies the same audited transition immediately.
 
 At stop, the adapter finalizes a run that called `bb_finish_run`. If a run made
 consequential changes without calling it, the stop hook gives the agent one
 short continuation prompt to finish the structured report. A second omission
-finalizes the run as partial instead of creating a loop. Acceptance remains a
-user action through `bb review`.
+finalizes the run as partial instead of creating a loop. Candidate resolution
+remains governed by repository knowledge mode; commitment changes require
+`bb review` except in explicitly selected yolo mode.
 
 The same binary should then be mapped to Claude Code's equivalent hook events.
 If that works without changing the domain core, portability has been proven.

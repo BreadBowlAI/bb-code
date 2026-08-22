@@ -65,8 +65,8 @@ Direct commitment creation requires explicit confirmation. Agent-facing interfac
 Expose exactly four tools:
 
 ```ts
-bb_context({ request: string, paths?: string[], maxItems?: number })
-bb_explain({ statementId: string })
+bb_context({ request: string, paths?: string[], maxItems?: number, runId?: string })
+bb_explain({ statementId: string }) // includes revision/evidence history and commitment reconciliation history
 bb_propose_update({ runId: string, proposal: CandidateProposal })
 bb_finish_run({
   runId: string,
@@ -74,6 +74,7 @@ bb_finish_run({
   summary: string,
   verification: Verification[],
   contextEffects: ContextEffect[],
+  commitmentReconciliations: CommitmentReconciliation[],
   requestIntent:
     | { disposition: "ephemeral", reason: string }
     | { disposition: "durable", proposal: IntentCandidateProposal },
@@ -82,7 +83,7 @@ bb_finish_run({
 })
 ```
 
-`bb_finish_run` is the end-of-run learning boundary. The coding agent submits structured learning using reasoning it already performed. Every completion separately classifies the request: an outcome that should survive the run produces an intent proposal, while a conversational or operational request records a specific ephemeral reason. Intent creates may start `active`, `satisfied`, or `abandoned`, allowing a one-run outcome to retain an honest lifecycle without becoming retrievable after completion. Always-on hook context and MCP descriptions use one classification rubric: intents are outcomes, beliefs are fallible claims about current implementation or behavior, and commitments are explicit future rules, constraints, or chosen decisions. Implementing, verifying, or approving code does not by itself turn a current fact into a commitment. Read-only investigations may produce beliefs when a non-obvious finding would prevent repeated inspection. Before creating a statement, agents compare retrieved context and prefer the existing statement lifecycle over duplicates. Exact same-kind duplicates are rejected deterministically. Agents report a context effect by statement ID when retrieved context changed the plan, caused clarification, avoided a violation, or changed verification. Agents propose only knowledge likely to affect future work, omitting trivial-to-rediscover facts and temporary details. A tool-assisted run must have at least one non-request proposal submitted during the run or provide a non-empty, specific `noDurableLearningReason`. bb-code does not invoke a second extraction model.
+`bb_finish_run` is the end-of-run learning boundary. The coding agent submits structured learning using reasoning it already performed. Every completion separately classifies the request: an outcome that should survive the run produces an intent proposal, while a conversational or operational request records a specific ephemeral reason. Intent creates may start `active`, `satisfied`, or `abandoned`, allowing a one-run outcome to retain an honest lifecycle without becoming retrievable after completion. Always-on hook context and MCP descriptions use one classification rubric: intents are outcomes, beliefs are fallible claims about current implementation or behavior, and commitments are explicit future rules, constraints, or chosen decisions. Implementing, verifying, or approving code does not by itself turn a current fact into a commitment. Read-only investigations may produce beliefs when a non-obvious finding would prevent repeated inspection. Before creating a statement, agents compare retrieved context and prefer the existing statement lifecycle over duplicates. Exact same-kind duplicates are rejected deterministically. Agents report a context effect by statement ID when retrieved context changed the plan, caused clarification, avoided a violation, or changed verification. Every commitment logged into the run must separately be reconciled as `preserved`, `revised`, `superseded`, `retired`, or `pending`; lifecycle dispositions require matching proposals, and `pending` requires an existing unresolved review. Agents propose only knowledge likely to affect future work, omitting trivial-to-rediscover facts and temporary details. A tool-assisted run must have at least one non-request proposal submitted during the run or provide a non-empty, specific `noDurableLearningReason`. bb-code does not invoke a second extraction model.
 
 ## Domain
 
@@ -192,15 +193,15 @@ The bootstrap skill may inspect repository documents and propose context, but do
 2. Reconcile repository and Git state.
 3. Create or resume the session and create a run.
 4. Consult the delivery adapter's capability-derived runtime policy. Codex and Claude retrieve immediately because their prompt hooks can inject context. Cursor stops here because `beforeSubmitPrompt` can only allow or block submission.
-5. Cursor's always-applied rule calls `bb_context` exactly once with the exact request; this binds to the prompt-hook run and performs the only retrieval. A normal empty result is success and must not be retried.
+5. Cursor's always-applied rule calls `bb_context` exactly once with the exact request; this binds to the prompt-hook run and performs the initial retrieval. A normal empty result is success and must not be retried. A later focused lookup passes the returned `runId` explicitly so its retrieved items belong to the same run.
 6. Retrieve local FTS candidates and, when enabled, QKV candidates with a 1.2-second timeout.
 7. Filter lexical candidates by meaningful term coverage, select the statistically distinct head of the semantic score distribution, fuse provider ranks and scores with reciprocal rank fusion (`k = 60`), then apply status, scope, ancestry, dirty-worktree, branch, path, freshness, conflict, and near-duplicate policy.
 8. Abstain when lexical coverage is insufficient or semantic scores are flat, and render at most 12 items, 1,200 deterministic tokens, and 4,800 characters.
-9. Log the rendered items and return a compact run contract. The detailed learning rubric remains in the `bb_finish_run` MCP description instead of consuming every context response.
+9. Log the rendered items and return a compact run contract, including the raw IDs registered for effects and commitment reconciliation. Rendered citations and raw `int_`/`bel_`/`com_` IDs are normalized at the public boundary. The detailed learning rubric remains in the `bb_finish_run` MCP description instead of consuming every context response.
 
 ### Run finish
 
-The agent records outcome, verification, effects, its request-intent disposition, and its explicit learning decision in one transaction. Context effects must reference an item logged for that run. Tool-assisted runs cannot finish with an unexplained empty non-request proposal set; proposals previously submitted through `bb_propose_update` count toward the decision. Every proposal enters the candidate ledger, then repository knowledge mode either resolves it in the same transaction or leaves it for human review. Human edits preserve the original proposal separately.
+The agent records outcome, verification, effects, commitment reconciliation, its request-intent disposition, and its explicit learning decision in one transaction. Context effects and reconciliations must reference items logged for that run. Every retrieved commitment requires exactly one reconciliation. A changed lifecycle disposition must match a proposal made in that run; a preserved disposition cannot coexist with an unresolved transition. Tool-assisted runs cannot finish with an unexplained empty non-request proposal set; proposals previously submitted through `bb_propose_update` count toward the decision. Every proposal enters the candidate ledger, then repository knowledge mode either resolves it in the same transaction or leaves it for human review. Human edits preserve the original proposal separately. Unresolved commitment transitions remain retrievable as warnings but are excluded from hard path enforcement. Git or code drift may supply evidence, but never retires a commitment by itself.
 
 Completion delivery follows host capability rather than a shared response shape. Codex and Claude can block Stop once with full completion guidance, then finalize a second omission as partial. Cursor receives one short `postToolUse.additional_context` reminder after its first consequential event. Its Stop hook never returns `followup_message`, because Cursor would submit that as a new user request; it immediately finalizes an omission as partial with `completion_reason=missing_finish`. Starting a new generation or ending a session also closes older unfinished runs, preventing orphaned run accumulation.
 
@@ -225,7 +226,7 @@ Never send raw code, diffs, stored/raw prompts, tool input/output, secrets, envi
 - Cursor injects one hidden post-tool completion reminder, never turns Stop into a synthetic user request, records missing completion structurally, and cannot loop when surfacing path commitments.
 - One before/after pair is retained for each host tool-use ID while duplicate delivery of either phase remains idempotent.
 - MCP exposes exactly the four named tools.
-- `bb_finish_run` records a request-intent disposition and proposals or an explicit no-learning reason for tool-assisted work; configured policy, not the agent tool, resolves proposals.
+- `bb_finish_run` records a request-intent disposition, reconciles every retrieved commitment, and records proposals or an explicit no-learning reason for tool-assisted work; configured policy, not the agent tool, resolves proposals.
 - `bb audit` exposes knowledge mode, lifecycle balance, and consequential-recall metrics, and policy-resolved reclassification repairs a wrong kind without rewriting history.
 - Completion, automatic acceptance, and review transitions are transactional and tested.
 - QKV is optional and degrades to local retrieval.

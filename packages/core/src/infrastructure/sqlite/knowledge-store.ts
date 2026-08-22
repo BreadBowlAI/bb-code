@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { BbError, invariant } from "../../domain/errors.js";
-import { createId, statementPrefix } from "../../domain/ids.js";
+import { createId, normalizeStatementReference, statementPrefix } from "../../domain/ids.js";
 import {
   CandidateProposalSchema,
   ScopeSchema,
@@ -55,6 +55,12 @@ export type QkvIndexDocument = {
   text: string;
 };
 
+export type StatementExplanation = {
+  current: CurrentStatement;
+  history: Array<Record<string, unknown>>;
+  reconciliations: Array<Record<string, unknown>>;
+};
+
 export type KnowledgeAudit = {
   statements: { total: number; active: number; byKind: Record<string, number>; allByKind: Record<string, number>; byStatus: Record<string, number>; repositoryScoped: number };
   candidates: { total: number; byOperation: Record<string, number>; byState: Record<string, number> };
@@ -91,6 +97,7 @@ export class KnowledgeStore {
   }
 
   getStatement(id: string, repositoryId?: string): CurrentStatement {
+    id = normalizeStatementReference(id);
     const row = this.connection.database.prepare(`SELECT s.id,s.repository_id,s.kind,s.created_at,r.id revision_id,r.revision_number,r.body,r.status,r.scope_kind,r.scope_path,r.attributes_json
       FROM statements s JOIN statement_revisions r ON r.id=s.current_revision_id WHERE s.id=?`).get(id) as Record<string, unknown> | undefined;
     if (!row || (repositoryId && row.repository_id !== repositoryId)) throw new BbError(`Statement ${id} was not found`, "not_found");
@@ -127,10 +134,10 @@ export class KnowledgeStore {
     };
   }
 
-  explainStatement(id: string): { current: CurrentStatement; history: Array<Record<string, unknown>> } {
+  explainStatement(id: string): StatementExplanation {
     const database = this.connection.database;
     const current = this.getStatement(id);
-    const revisions = database.prepare("SELECT id,revision_number,body,status,scope_kind,scope_path,attributes_json,created_by_json,created_at FROM statement_revisions WHERE statement_id=? ORDER BY revision_number").all(id) as Array<Record<string, unknown>>;
+    const revisions = database.prepare("SELECT id,revision_number,body,status,scope_kind,scope_path,attributes_json,created_by_json,created_at FROM statement_revisions WHERE statement_id=? ORDER BY revision_number").all(current.id) as Array<Record<string, unknown>>;
     const history = revisions.map((revision) => {
       const evidenceRows = database.prepare(`SELECT e.id,e.kind,e.summary,e.run_id,e.git_view_id,re.relationship,e.created_at,
         g.head_commit_sha,g.head_tree_sha,g.dirty_fingerprint,g.branch_label,g.stable_patch_id
@@ -139,10 +146,13 @@ export class KnowledgeStore {
       const evidence = evidenceRows.map((item) => ({ ...item, paths: database.prepare("SELECT path,blob_sha FROM evidence_paths WHERE evidence_id=? ORDER BY path").all(String(item.id)) as Array<Record<string, unknown>> }));
       return { ...revision, attributes: fromJson(revision.attributes_json), createdBy: fromJson(revision.created_by_json), evidence };
     });
-    return { current, history };
+    const reconciliations = database.prepare(`SELECT cr.run_id,cr.retrieval_id,cr.disposition,cr.reason,cr.created_at
+      FROM commitment_reconciliations cr WHERE cr.statement_id=? ORDER BY cr.created_at`).all(current.id) as Array<Record<string, unknown>>;
+    return { current, history, reconciliations };
   }
 
   anchors(statementId: string): EvidenceAnchor[] {
+    statementId = normalizeStatementReference(statementId);
     const database = this.connection.database;
     const rows = database.prepare(`SELECT e.id,re.relationship,e.git_view_id,g.worktree_id,g.head_commit_sha,g.dirty_fingerprint,g.branch_label,g.stable_patch_id
       FROM statements s JOIN revision_evidence re ON re.revision_id=s.current_revision_id
@@ -162,7 +172,31 @@ export class KnowledgeStore {
   }
 
   hasContradictoryEvidence(statementId: string): boolean {
+    statementId = normalizeStatementReference(statementId);
     return Boolean(this.connection.database.prepare("SELECT 1 FROM statements s JOIN revision_evidence re ON re.revision_id=s.current_revision_id WHERE s.id=? AND re.relationship='contradicts' LIMIT 1").get(statementId));
+  }
+
+  unresolvedCommitmentTransitionIds(repositoryId: string, statementIds?: string[]): Set<string> {
+    const parameters: string[] = [repositoryId];
+    let idFilter = "";
+    if (statementIds?.length) {
+      idFilter = ` AND c.target_statement_id IN (${statementIds.map(() => "?").join(",")})`;
+      parameters.push(...statementIds.map(normalizeStatementReference));
+    }
+    const rows = this.connection.database.prepare(`SELECT DISTINCT c.target_statement_id
+      FROM candidate_updates c JOIN statements s ON s.id=c.target_statement_id
+      WHERE c.repository_id=? AND s.kind='commitment'
+        AND c.state IN ('pending','deferred')
+        AND c.operation IN ('revise','supersede','retire','reclassify')${idFilter}`).all(...parameters) as Array<{ target_statement_id: string }>;
+    return new Set(rows.map((row) => row.target_statement_id));
+  }
+
+  lifecycleCandidatesForRun(runId: string): Array<{ statementId: string; operation: string; state: string }> {
+    const rows = this.connection.database.prepare(`SELECT target_statement_id,operation,state
+      FROM candidate_updates
+      WHERE run_id=? AND target_statement_id IS NOT NULL
+        AND operation IN ('revise','supersede','retire','reclassify')`).all(runId) as Array<{ target_statement_id: string; operation: string; state: string }>;
+    return rows.map((row) => ({ statementId: row.target_statement_id, operation: row.operation, state: row.state }));
   }
 
   conflictingStatementIds(repositoryId: string, statementIds: string[]): Set<string> {
@@ -180,6 +214,7 @@ export class KnowledgeStore {
         conflicts.add(second.id);
       }
     }
+    for (const id of this.unresolvedCommitmentTransitionIds(repositoryId, statementIds)) conflicts.add(id);
     return conflicts;
   }
 

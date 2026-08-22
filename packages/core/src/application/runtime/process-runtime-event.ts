@@ -133,7 +133,7 @@ export async function processRuntimeEvent(
       ...classification
     });
     if (event.event === "before_tool" && paths.length) {
-      const commitments = workspace.database.listStatements(workspace.repositoryId).filter((statement) => statement.kind === "commitment" && statement.status === "accepted" && pathCommitmentApplies(statement, paths));
+      const commitments = workspace.database.listStatements(workspace.repositoryId).filter((statement) => statement.kind === "commitment" && statement.status === "accepted" && !workspace.database.isCommitmentQuarantined(workspace.repositoryId, statement.id) && pathCommitmentApplies(statement, paths));
       const noticeKey = guidanceKey("path-commitments", [...commitments.map((statement) => statement.id).sort(), ...paths.slice().sort()]);
       if (commitments.length && inserted && workspace.database.addRunEvent(runId, {
         kind: "guidance",
@@ -144,7 +144,7 @@ export async function processRuntimeEvent(
         occurredAt: event.occurredAt,
         consequential: false
       })) {
-        return { runId, effects: [{ type: "path_commitments", content: `# bb-code path commitments\n${commitments.map((statement) => `- [bb:${statement.id}@${statement.revisionId}] ${statement.body}`).join("\n")}\nReview these constraints, then retry the tool if the action is compatible.` }] };
+        return { runId, effects: [{ type: "path_commitments", content: `# bb-code path commitments\n${commitments.map((statement) => `- [bb:${statement.id}@${statement.revisionId}] ${statement.body}`).join("\n")}\nIf the current owner request changes one of these commitments, propose revise, supersede, or retire before retrying. Otherwise, retry only if the action is compatible.` }] };
       }
     }
     if (

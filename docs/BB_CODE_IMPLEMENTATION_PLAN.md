@@ -117,7 +117,8 @@ Expose exactly four tools:
 bb_context({
   request: string,
   paths?: string[],
-  maxItems?: number
+  maxItems?: number,
+  runId?: string
 })
 
 bb_explain({
@@ -135,6 +136,8 @@ bb_finish_run({
   summary: string,
   verification: Verification[],
   contextEffects: ContextEffect[],
+  commitmentReconciliations: CommitmentReconciliation[],
+  requestIntent: RequestIntentDecision,
   proposals: CandidateProposal[],
   noDurableLearningReason?: string
 })
@@ -526,13 +529,18 @@ On `PostToolUse`:
 The injected context instructs the agent to call `bb_finish_run` once.
 
 `bb_finish_run` validates the run and repository, records outcome,
-verification, and context effects, converts proposals to candidates,
+verification, context effects, and commitment reconciliations, converts proposals to candidates,
 resolves evidence paths against run events and Git, and marks the run as
 finish-tool-complete. Injected guidance tells the agent to report material
 effects by retrieved statement ID and to treat implementation facts as beliefs
 unless explicit future authority makes them commitments. Before create, the
 agent checks retrieved context and prefers revision or lifecycle transitions;
-the store rejects exact same-kind duplicates.
+the store rejects exact same-kind duplicates. Every commitment retrieved into
+the run requires one reconciliation disposition. Revised, superseded, and
+retired dispositions require a matching lifecycle proposal; preserved cannot
+coexist with an unresolved transition. A pending commitment transition remains
+visible with a warning but is removed from hard path enforcement until human
+review. In yolo mode the same transition is accepted atomically.
 
 At `Stop`:
 
@@ -667,6 +675,8 @@ Release acceptance scenarios:
 10. Keep injected context below 1,200 tokens.
 11. Record a real `changed_plan`, `caused_clarification`, or
     `avoided_violation` outcome.
+12. Reverse a retrieved commitment and verify standard mode quarantines the
+    pending transition while yolo mode atomically advances its lifecycle.
 
 Performance targets:
 

@@ -9,10 +9,12 @@ Before creating a statement, compare the retrieved context. Prefer revise, satis
 
 export const CONTEXT_EFFECT_GUIDANCE = `For every retrieved statement that materially affected this run, include one contextEffects entry using its statement ID: changed_plan, caused_clarification, avoided_violation, or changed_verification. Use no_effect only when a retrieved statement was considered but did not affect the work. Do not fabricate effects for context that was not used.`;
 
+export const COMMITMENT_RECONCILIATION_GUIDANCE = `Every commitment registered by bb_context must have exactly one commitmentReconciliations entry. Use preserved when the current request remains compatible. If the owner changes or reverses it, submit a matching revise, supersede, or retire proposal and use the corresponding disposition. Use pending only when a commitment transition is already awaiting human review. In strict and standard modes, a pending commitment transition removes that statement from hard enforcement until review; yolo applies the transition immediately.`;
+
 export function finishRunReminder(runId: string): string {
-  return `Before your final response, call bb_finish_run with runId ${runId}. Include requestIntent and contextEffects; after tool-assisted work, submit useful proposals or a specific noDurableLearningReason.`;
+  return `Before your final response, call bb_finish_run with runId ${runId}. Include requestIntent and contextEffects, plus reconciliation for every registered commitment; after tool-assisted work, submit useful proposals or a specific noDurableLearningReason.`;
 }
 
 export function finishRunGuidance(runId: string): string {
-  return `${finishRunReminder(runId)} ${DURABLE_LEARNING_RUBRIC} ${CONTEXT_EFFECT_GUIDANCE} Submit useful proposals for resolution under the repository knowledge mode.`;
+  return `${finishRunReminder(runId)} ${DURABLE_LEARNING_RUBRIC} ${CONTEXT_EFFECT_GUIDANCE} ${COMMITMENT_RECONCILIATION_GUIDANCE} Submit useful proposals for resolution under the repository knowledge mode.`;
 }

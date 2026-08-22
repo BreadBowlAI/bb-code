@@ -47,7 +47,7 @@ Install `plugins/bb-code` through the included Codex marketplace, add `.claude-p
 - `bb_context` retrieves applicable context for a request and returns the active run ID when hooks started the run.
 - `bb_explain` returns one statement's typed current revision.
 - `bb_propose_update` records one proposed learning; the repository knowledge mode determines whether it activates immediately or waits for review.
-- `bb_finish_run` records the outcome, verification, context effects, an explicit request-intent decision, and proposals. A durable request becomes an intent proposal; conversational or operational work records why it is ephemeral. After any tool-assisted work with no learning proposals, it requires an explicit `noDurableLearningReason`.
+- `bb_finish_run` records the outcome, verification, context effects, reconciliation for every retrieved commitment, an explicit request-intent decision, and proposals. A durable request becomes an intent proposal; conversational or operational work records why it is ephemeral. After any tool-assisted work with no learning proposals, it requires an explicit `noDurableLearningReason`. Standard-mode commitment transitions wait for human review and quarantine the disputed constraint from hard enforcement; yolo applies the same audited transition immediately.
 
 There is intentionally no `accept` MCP tool.
 

@@ -1,7 +1,7 @@
 # Product decisions
 
 Status: accepted direction for the MVP  
-Updated: 2026-08-16
+Updated: 2026-08-22
 
 This document is the compact decision record for bb-code. The rationale and
 alternatives are developed fully in [`BB_CODE_MVP.md`](BB_CODE_MVP.md).
@@ -78,6 +78,15 @@ context changed its plan, caused clarification, avoided a violation, or changed
 verification. bb-code validates and stores that report; it does not fabricate
 the effect from retrieval alone.
 
+Every commitment retrieved into a run must also be reconciled at finish. The
+agent explicitly preserves it, submits a matching revise/supersede/retire
+proposal, or acknowledges an already-pending review. Reconciliation is not an
+authority bypass: `strict` and `standard` still require a human to accept a
+commitment transition, while `yolo` applies it immediately through the same
+candidate/revision ledger. A commitment with an unresolved transition remains
+visible with a warning but is quarantined from hard path enforcement until the
+review is resolved. Thus `yolo` means no approval step, not no integrity check.
+
 ## Trust rules
 
 1. Every durable statement has provenance and scope.
@@ -86,7 +95,9 @@ the effect from retrieval alone.
    Commitments require review except in explicitly selected `yolo` mode.
 4. Code and tests may contradict a belief; they cannot decide user intent.
 5. Retrieval exposes uncertainty and can explain why a statement was selected.
-6. Accepted commitments remain active until explicitly superseded or retired.
+6. Accepted commitments remain active until explicitly revised, superseded, or
+   retired. A pending transition quarantines hard enforcement without silently
+   rewriting the accepted history.
 
 Trust is more important than maximizing the amount of remembered text.
 

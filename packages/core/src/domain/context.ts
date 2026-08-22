@@ -10,6 +10,7 @@ export type ContextItem = CurrentStatement & {
   freshness: "fresh" | "stale" | "unknown";
   applicabilityReason: string;
   conflict?: boolean;
+  conflictReason?: "contradictory_evidence" | "pending_commitment_reconciliation";
 };
 
 export type StatementApplicability = {

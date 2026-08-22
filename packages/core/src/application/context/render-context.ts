@@ -12,26 +12,31 @@ export function renderContextResult(items: ContextItem[], runId?: string): { ren
   const lines = [
     "# bb-code context",
     ...(runId ? [`Run: ${runId}`] : []),
-    "Treat commitments as constraints, beliefs as fallible context, and intents as goals. Report statement IDs through contextEffects when they affect the work.",
+    "Treat commitments as constraints, beliefs as fallible context, and intents as goals. A current request does not silently erase a commitment: propose its lifecycle change and reconcile it. Report statement IDs through contextEffects when they affect the work.",
     ""
   ];
-  const footer = runId ? [
+  const footer = (selected: ContextItem[]) => runId ? [
     "",
+    ...(selected.length ? [`Registered statement IDs from this lookup for the run: ${selected.map((item) => item.id).join(", ")}.`] : []),
+    ...(selected.some((item) => item.kind === "commitment") ? [`Reconcile every registered commitment in commitmentReconciliations: ${selected.filter((item) => item.kind === "commitment").map((item) => item.id).join(", ")}.`] : []),
     finishRunReminder(runId)
   ] : [];
   const selected: ContextItem[] = [];
   const conflicts: string[] = [];
   if (items.length === 0) lines.push("No relevant reviewed bb-code context was found.");
   for (const item of items) {
-    const warning = item.conflict ? " WARNING: reviewed contradictory evidence exists." : "";
+    const warning = item.conflictReason === "pending_commitment_reconciliation"
+      ? " WARNING: a commitment transition is awaiting human review; do not enforce this statement as a hard constraint."
+      : item.conflict ? " WARNING: reviewed contradictory evidence exists." : "";
     const line = `- [${item.kind} bb:${item.id}@${item.revisionId}] ${item.body} (${item.applicabilityReason}; freshness:${item.freshness})${warning}`;
-    const candidate = [...lines, line, ...footer].join("\n");
+    const candidateItems = [...selected, item];
+    const candidate = [...lines, line, ...footer(candidateItems)].join("\n");
     if (candidate.length > MAX_RENDERED_CHARACTERS || countRenderedTokens(candidate) > MAX_RENDERED_TOKENS) break;
     lines.push(line);
     selected.push(item);
-    if (item.conflict) conflicts.push(`bb:${item.id}@${item.revisionId} has reviewed contradictory evidence`);
+    if (item.conflict) conflicts.push(item.conflictReason === "pending_commitment_reconciliation" ? `bb:${item.id}@${item.revisionId} has a transition awaiting human review` : `bb:${item.id}@${item.revisionId} has reviewed contradictory evidence`);
   }
-  lines.push(...footer);
+  lines.push(...footer(selected));
   const rendered = lines.join("\n");
   return { rendered, items: selected, tokenCount: countRenderedTokens(rendered), conflicts };
 }

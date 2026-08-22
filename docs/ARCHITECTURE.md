@@ -107,6 +107,14 @@ commitment with agent-facing guidance; a persisted guidance event makes the
 retry non-blocking. Codex and Claude retain prompt-time context injection and a
 single blocking Stop nudge.
 
+Commitment reconciliation is an application-level invariant over the retrieved
+run context and candidate ledger. The core requires one disposition for every
+retrieved commitment before completing the run. Repository knowledge mode
+still owns resolution. Pending commitment transitions are surfaced as disputed
+context and excluded from hard path enforcement; accepted statement history is
+never rewritten or inferred from code drift. Delivery adapters only explain
+when the host should call the existing four MCP tools.
+
 ## Runtime flow
 
 ```mermaid
@@ -133,7 +141,7 @@ sequenceDiagram
   App->>DB: log fused retrieval
   App-->>Host: cited context + run ID
   Host->>App: bb_finish_run
-  App->>DB: outcome + candidates
+  App->>DB: outcome + reconciliations + candidates
   App->>DB: resolve by strict / standard / yolo policy
   alt policy leaves candidate pending
     Host-->>DB: Human runs bb review

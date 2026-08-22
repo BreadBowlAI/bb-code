@@ -18,6 +18,7 @@ export async function finishRun(cwd: string, raw: unknown, databasePath?: string
       summary: input.summary,
       verification: input.verification,
       effects: input.contextEffects.map((effect) => ({ statementId: effect.statementId, effect: effect.effect, ...(effect.note ? { note: effect.note } : {}) })),
+      reconciliations: input.commitmentReconciliations,
       requestIntent: input.requestIntent,
       endGitViewId: workspace.gitViewId,
       proposalGitViewId: workspace.gitViewId,
